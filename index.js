@@ -363,6 +363,7 @@ async function onGenerationEnd() {
     if (mes && isSpokenMessage(mes)) {
         await autoHandleMessage(mes, { allowCalls: true, allowNarr: true, streamingNow: false });
     }
+    charpopup.refreshOpenPopup(); // 有新台词 → 角色弹窗即时补行
 }
 
 function stopAuto() {
@@ -762,6 +763,7 @@ async function registerSlashCommands() {
 function onChatContextChanged() {
     handledCalls.clear();
     handledNarr.clear();
+    charpopup.refreshOpenPopup();
 }
 
 // ---------------------------------------------------------------------------
@@ -813,7 +815,7 @@ async function init() {
     subscribe('chat_changed', onChatContextChanged);
     subscribe('character_selected', onChatContextChanged);
     subscribe('message_swiped', onChatContextChanged);
-    subscribe('message_rendered', () => scanDebounced());
+    subscribe('message_rendered', () => { scanDebounced(); charpopup.refreshOpenPopup(); });
 
     // 提示词注入 & 命令
     refreshPromptInjection();

@@ -6,6 +6,7 @@
 import { LANGUAGES, NARRATOR_KEY } from './defaults.js';
 import * as settings from './settings.js';
 import { debounce } from './util.js';
+import { findCalls } from './parser.js';
 
 let voiceOptions = [];       // [{id,label,group}]
 let cachedVoiceKey = '';     // 服务商变化时重新获取
@@ -77,26 +78,36 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) { return escapeHtml(s); }
 
+/**
+ * 角色列表依据「生成结果」动态收集：
+ * 扫描当前聊天消息里出现的 [[BetterTTS: …]] 语音调用的 character 字段
+ * （无 character 时用说话人名兜底，与朗读时解析一致），并保留历史已配置的角色名。
+ */
 function collectSpeakers() {
     const names = [];
     const add = (n) => {
         n = String(n || '').trim();
-        if (n && !names.includes(n)) names.push(n);
+        if (n && n !== NARRATOR_KEY && !names.includes(n)) names.push(n);
     };
     try {
         const c = callbacks.getContext ? callbacks.getContext() : null;
-        const ctx = c || (globalThis.SillyTavern ? (typeof globalThis.SillyTavern.getContext === 'function' ? globalThis.SillyTavern.getContext() : null) : null);
-        if (ctx) {
-            if (ctx.characters && Array.isArray(ctx.characters)) ctx.characters.forEach(ch => add(ch?.name));
-            if (ctx.chat && Array.isArray(ctx.chat)) {
-                ctx.chat.forEach(m => {
-                    if (m && !m.is_user && !m.is_system && m.name) add(m.name);
-                });
+        const ctx = c || (globalThis.SillyTavern && typeof globalThis.SillyTavern.getContext === 'function' ? globalThis.SillyTavern.getContext() : null);
+        if (ctx && Array.isArray(ctx.chat)) {
+            for (const m of ctx.chat) {
+                if (!m || typeof m.mes !== 'string') continue;
+                let found = false;
+                for (const call of findCalls(m.mes)) {
+                    if (call.obj) {
+                        const name = String(call.obj.character || '').trim();
+                        if (name) { add(name); found = true; }
+                    }
+                }
+                // 与运行时一致：调用未带 character 时回退到消息说话人
+                if (!found && !m.is_user && !m.is_system && m.name) add(m.name);
             }
-            if (ctx.name2 && !names.includes(ctx.name2)) add(ctx.name2);
         }
     } catch { /* ignore */ }
-    // 加上已保存映射中的名字（即使不在当前聊天）
+    // 已保存映射中的名字保留（即使当前聊天/生成结果里还没出现，便于修改）
     try {
         const map = settings.characterMap();
         for (const k of Object.keys(map)) if (k !== NARRATOR_KEY) add(k);
@@ -106,7 +117,7 @@ function collectSpeakers() {
 
 export function openCharacterPopup(opts = {}) {
     callbacks = opts;
-    if (popupEl && popupEl.isConnected) { render(); popupEl.style.display = ''; return; }
+    if (popupEl && popupEl.isConnected) { render(snapshotRows()); popupEl.style.display = ''; return; }
 
     popupEl = document.createElement('div');
     popupEl.className = 'btts-popup-root';
@@ -119,9 +130,14 @@ export function openCharacterPopup(opts = {}) {
         </div>
         <div class="btts-popup-body">
           <div class="btts-popup-tip">
-            提示：语音调用中的 voice/language 字段优先；留空时按此处的角色映射决定。
+            角色列表依据<b>模型生成结果</b>自动出现（来自语音调用 character 字段），生成新台词后会自动补充；
+            也可手动添加名字。voice/language 留空时使用该角色配置；无配置则用“旁白 / 默认”。
           </div>
           <div id="btts-crows"></div>
+          <div class="btts-addrow">
+            <input id="btts-new-name" class="text_pole btts-crow-voice" type="text" placeholder="手动添加角色名…">
+            <button type="button" class="menu_button btts-add-name">＋ 添加</button>
+          </div>
         </div>
         <div class="btts-popup-foot">
           <button type="button" class="menu_button btts-refresh-voices">⟳ 获取音色</button>
@@ -144,6 +160,17 @@ export function openCharacterPopup(opts = {}) {
             const sel = row.querySelector('[data-field="language"]');
             if (sel) sel.value = '';
             settings.setCharacterMapping(name, { voice: '', language: '' });
+            return;
+        }
+        const addBtn = e.target.closest('.btts-add-name');
+        if (addBtn) {
+            const input = popupEl.querySelector('#btts-new-name');
+            const name = (input?.value || '').trim();
+            if (name) {
+                settings.setCharacterMapping(name, { voice: '', language: '' });
+                if (input) input.value = '';
+                render(snapshotRows());
+            }
             return;
         }
     });
@@ -178,7 +205,7 @@ export function openCharacterPopup(opts = {}) {
     document.addEventListener('keydown', closeOnEsc);
     popupEl._closeOnEsc = closeOnEsc;
 
-    render();
+    render(snapshotRows());
     popupEl.style.display = '';
     // 拉取当前服务商音色（异步，不影响展示）
     getVoiceOptions(settings.get()).then(() => {
@@ -193,13 +220,38 @@ function renderDatalist() {
     buildDatalist();
 }
 
-function render() {
-    const box = popupEl.querySelector('#btts-crows');
+/** 快照当前各行已填（可能未保存）的值，重渲染时恢复，避免打断输入 */
+function snapshotRows() {
+    const snap = {};
+    document.querySelectorAll('#btts-crows .btts-crow').forEach(r => {
+        snap[r.dataset.name] = {
+            voice: r.querySelector('[data-field="voice"]')?.value || '',
+            language: r.querySelector('[data-field="language"]')?.value || '',
+        };
+    });
+    return snap;
+}
+
+/**
+ * 渲染行列表
+ * @param {object} [overlay] { name: {voice, language} } 覆盖到显示值上（保留未保存输入）
+ */
+function render(overlay) {
+    const box = popupEl?.querySelector('#btts-crows');
     if (!box) return;
     const speakers = collectSpeakers();
     const names = [NARRATOR_KEY, ...speakers];
     const map = settings.characterMap();
-    box.innerHTML = names.map(name => rowHtml(name, map[name], name === NARRATOR_KEY)).join('');
+    const merged = {};
+    for (const [k, v] of Object.entries(map)) merged[k] = { ...v };
+    for (const [k, v] of Object.entries(overlay || {})) merged[k] = { ...(merged[k] || {}), ...v };
+    box.innerHTML = names.map(name => rowHtml(name, merged[name], name === NARRATOR_KEY)).join('');
+}
+
+/** 弹窗打开时：根据最新生成结果补行（保留正在编辑的值） */
+export function refreshOpenPopup() {
+    if (!popupEl || !popupEl.isConnected || popupEl.style.display === 'none') return;
+    render(snapshotRows());
 }
 
 function sampleRow(row) {

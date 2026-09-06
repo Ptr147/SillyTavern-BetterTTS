@@ -271,6 +271,13 @@
 }
 .btts-crow-play:hover { background: var(--btts-main); color: #fff; border-color: transparent; }
 .btts-crow-clear:hover { background: var(--btts-em, #c0392b); color: #fff; border-color: transparent; }
+.btts-addrow {
+    display: flex;
+    gap: 6px;
+    margin: 8px 0 10px;
+}
+.btts-addrow input { flex: 1; min-width: 120px; }
+.btts-addrow .btts-add-name { flex: 0 0 auto; }
 
 /* ============================================================================
    设置弹窗（⚙）
