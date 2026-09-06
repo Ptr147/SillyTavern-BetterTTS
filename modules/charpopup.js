@@ -111,10 +111,17 @@ function collectSpeakers() {
             }
         }
     } catch { /* ignore */ }
-    // 已保存映射中的名字保留（即使当前聊天/生成结果里还没出现，便于修改）
+    // 已保存的“本角色卡”映射保留（其它卡/旧版纯名字也以展示名归并；写入时按当前卡隔离）
     try {
         const map = settings.characterMap();
-        for (const k of Object.keys(map)) if (k !== NARRATOR_KEY) add(k);
+        for (const k of Object.keys(map)) {
+            if (k === NARRATOR_KEY) continue;
+            const label = settings.cardLabelOf(k);
+            const current = settings.cardKeyOf(label);
+            // 其它角色卡的同名条目不占当前列表（避免跨卡串扰）
+            if (String(k).includes('::') && current !== k) continue;
+            add(label);
+        }
     } catch { /* ignore */ }
     return names;
 }
@@ -129,7 +136,7 @@ export function openCharacterPopup(opts = {}) {
       <div class="btts-popup" role="dialog" aria-label="BetterTTS 角色设置">
         <div class="btts-popup-head">
           <span class="btts-popup-title">🔊 BetterTTS-角色</span>
-          <span class="btts-popup-sub">为不同角色指定 说话人/音色 与 语言（全局生效，按角色名匹配）</span>
+          <span class="btts-popup-sub">按“角色卡”生效：同一张卡跨聊天共享配置，同名不同卡互不影响</span>
           <button type="button" class="btts-popup-close" aria-label="关闭">✕</button>
         </div>
         <div class="btts-popup-body">
@@ -245,11 +252,12 @@ function render(overlay) {
     if (!box) return;
     const speakers = collectSpeakers();
     const names = [NARRATOR_KEY, ...speakers];
-    const map = settings.characterMap();
-    const merged = {};
-    for (const [k, v] of Object.entries(map)) merged[k] = { ...v };
-    for (const [k, v] of Object.entries(overlay || {})) merged[k] = { ...(merged[k] || {}), ...v };
-    box.innerHTML = names.map(name => rowHtml(name, merged[name], name === NARRATOR_KEY)).join('');
+    const ov = overlay || {};
+    box.innerHTML = names.map(name => {
+        const base = settings.getCharacterMapping(name);
+        const merged = { ...(base || {}), ...(ov[name] || {}) };
+        return rowHtml(name, merged, name === NARRATOR_KEY);
+    }).join('');
 }
 
 /** 弹窗打开时：根据最新生成结果补行（保留正在编辑的值） */

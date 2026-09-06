@@ -158,13 +158,29 @@ function applyUserCss(cssText) {
 // 朗读任务构造（语音调用 / 旁白文本）
 // ---------------------------------------------------------------------------
 
-/** 查找角色已注册的声音描述（含旁白别称） */
+/** 当前角色卡的头像解析（供“按角色卡独立”存储使用） */
+function avatarForName(name) {
+    try {
+        const c = ctx();
+        const arr = (c && Array.isArray(c.characters)) ? c.characters : [];
+        const target = String(name || '').trim();
+        for (const ch of arr) {
+            if (ch && String(ch.name || '') === target) {
+                const av = ch.avatar || ch.image || ch.avatarUrl || '';
+                if (av) return String(av);
+            }
+        }
+    } catch { /* ignore */ }
+    return null;
+}
+
+/** 查找角色已注册的声音描述（按当前角色卡；含旁白别称） */
 function voiceDescriptionOf(name) {
     if (!name) return '';
-    const map = settings.characterMap();
     const candidates = [name, ...(NARRATOR_ALIASES.includes(name) ? [] : NARRATOR_ALIASES)];
     for (const cand of candidates) {
-        if (map[cand] && String(map[cand].voiceDescription || '').trim()) return String(map[cand].voiceDescription).trim();
+        const m = settings.getCharacterMapping(cand);
+        if (m && String(m.voiceDescription || '').trim()) return String(m.voiceDescription).trim();
     }
     return '';
 }
@@ -186,8 +202,8 @@ function onRoleSeen(obj) {
         const desc = String(obj?.voice || obj?.description || obj?.sound || obj?.desc || '').trim();
         if (!name) return;
         if (desc) {
-            const map = settings.characterMap();
-            settings.setCharacterMapping(name, { ...(map[name] || {}), voiceDescription: desc });
+            const existing = settings.getCharacterMapping(name);
+            settings.setCharacterMapping(name, { ...(existing || {}), voiceDescription: desc });
             dlog('BTTS-AddRole 注册/更新 音色描述:', name);
         }
     } catch (e) { logDebug('AddRole 处理失败', e); }
@@ -503,53 +519,6 @@ function stopAuto() {
     generating = false;
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     player.stopAll();
-}
-
-// ---------------------------------------------------------------------------
-// 兜底自动朗读监视器（不依赖 ST 生成事件）
-// 通过“最后一条非用户消息的长度变化”推断：在增长=流式生成中（读取已完成的调用），
-// 连续稳定≈2s=生成结束（整段/旁白/全文）。事件可用时两者叠加也安全（已播 key 去重）。
-// ---------------------------------------------------------------------------
-let watchLastSig = null;
-let watchStable = 0;
-let watchEndedSig = '';
-
-function autoWatcherTick() {
-    try {
-        if (!settings.isEnabled()) { watchLastSig = null; watchStable = 0; return; }
-        const mes = lastNonUserMes();
-        if (!mes || typeof mes.mes !== 'string' || !mes.mes.trim()) {
-            watchLastSig = null;
-            watchStable = 0;
-            return;
-        }
-        const key = mesBaseKey(mes);
-        const sig = key + '#' + mes.mes.length;
-        if (sig !== watchLastSig) {
-            const isFirst = watchLastSig === null; // 首次/换聊后的基线，仅记录不触发
-            watchLastSig = sig;
-            watchStable = 0;
-            if (isFirst) return;
-            if (autoOff) autoOff = false; // 检测到新内容 → 恢复自动
-            const s = settings.get();
-            if (s.streaming && s.prompt?.mode !== 'full') {
-                // 边出边读：尽量即时朗读已完整出现的函数调用
-                autoHandleMessage(mes, { allowCalls: true, allowNarr: false, streamingNow: true }).catch(() => { });
-            }
-            return;
-        }
-        if (autoOff) { watchStable = 0; return; }
-        watchStable++;
-        if (watchStable >= 2 && watchEndedSig !== sig) {
-            watchEndedSig = sig;
-            watchStable = 0;
-            autoHandleMessage(mes, { allowCalls: true, allowNarr: true, streamingNow: false }).catch(() => { });
-        }
-    } catch (e) { logDebug('自动朗读监视器异常', e); }
-}
-
-function startAutoWatcher() {
-    setInterval(autoWatcherTick, 900);
 }
 
 // ---------------------------------------------------------------------------
@@ -1003,9 +972,6 @@ async function registerSlashCommands() {
 function onChatContextChanged() {
     handledCalls.clear();
     handledNarr.clear();
-    watchLastSig = null;
-    watchStable = 0;
-    watchEndedSig = '';
     ingestRolesFromChat();
     charpopup.refreshOpenPopup();
 }
@@ -1021,6 +987,7 @@ async function init() {
     }
 
     settings.init(extension_settings);
+    settings.setCharacterAvatarResolver(avatarForName); // 角色配置按“角色卡”独立
     const debouncedPersist = debounce(() => {
         try {
             const c = ctx();
@@ -1051,7 +1018,6 @@ async function init() {
     // 打开已有聊天时全量渲染一次（幂等）
     setTimeout(scanAllVisible, 600);
     setTimeout(ingestRolesFromChat, 1600); // 载入历史消息后吸收 BTTS-AddRole
-    startAutoWatcher(); // 兜底自动/流式朗读监视器（不依赖 ST 生成事件）
 
     // 设置挂载（立即尝试一次；ST 部分 UI 渲染较晚，配合下方定时重试）
     ensureMounts();

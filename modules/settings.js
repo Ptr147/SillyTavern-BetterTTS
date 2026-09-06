@@ -1,6 +1,6 @@
 // BetterTTS - 配置数据管理（读写 extension_settings.betterTTS）
 
-import { DEFAULTS, SETTINGS_KEY, DEFAULT_PROMPT_TEXT, DEFAULT_FULL_PROMPT_TEXT } from './defaults.js';
+import { DEFAULTS, SETTINGS_KEY, NARRATOR_KEY, DEFAULT_PROMPT_TEXT, DEFAULT_FULL_PROMPT_TEXT } from './defaults.js';
 import { prettyJson, safeParse } from './util.js';
 
 let extensionSettings = null; // ST 的 extension_settings 对象
@@ -106,36 +106,72 @@ export function characterMap() {
     return data.characters;
 }
 
-/** 设置某角色（名称）的映射；合并保留 voiceDescription 等附加字段，全空则删除该角色 */
+let avatarResolver = null; // (name) => avatar|string|null ，由 index 注入，用于“按角色卡独立”存储
+
+/** 注入“按角色名取当前角色卡头像”的解析器 */
+export function setCharacterAvatarResolver(fn) { avatarResolver = fn; }
+
+function resolveAvatar(name) {
+    try { return avatarResolver ? avatarResolver(name) : null; } catch { return null; }
+}
+
+/**
+ * 角色映射键：默认按“角色卡”独立 → key = <名字>::<头像路径>；
+ * 同名不同卡互不影响；无头像信息（旁白/新角色等）时回退为纯名字。
+ */
+export function cardKeyOf(name) {
+    if (!name) return '';
+    const n = String(name).trim();
+    if (!n || n === NARRATOR_KEY) return n;
+    const av = resolveAvatar(n);
+    return av ? n + '::' + String(av) : n;
+}
+
+/** 由存储键还原展示名（去掉 ::头像） */
+export function cardLabelOf(key) {
+    const s = String(key || '');
+    const i = s.lastIndexOf('::');
+    return i > 0 ? s.slice(0, i) : s;
+}
+
+/** 读取映射：优先“当前角色卡”键，兼容旧版纯名字条目 */
+export function getCharacterMapping(name) {
+    const map = characterMap();
+    if (!name) return {};
+    const full = cardKeyOf(name);
+    if (map[full]) return map[full];
+    const plain = String(name).trim();
+    if (plain && plain !== full && map[plain]) return map[plain];
+    return {};
+}
+
+/** 写入映射：只写“当前角色卡”键（不污染同名其它卡） */
 export function setCharacterMapping(name, mapping) {
     const map = characterMap();
-    const merged = { ...(map[name] || {}), ...(mapping || {}) };
+    const key = cardKeyOf(name) || String(name || '').trim();
+    if (!key) return;
+    const merged = { ...(map[key] || {}), ...(mapping || {}) };
     const cleaned = {};
     for (const [k, v] of Object.entries(merged)) {
         if (v !== undefined && v !== null && String(v).trim() !== '') cleaned[k] = v;
     }
-    if (Object.keys(cleaned).length) map[name] = cleaned;
-    else delete map[name];
+    if (Object.keys(cleaned).length) map[key] = cleaned;
+    else delete map[key];
     persist();
 }
 
-/** 删除某角色的完整映射（含声音描述） */
+/** 删除某角色卡的完整映射（含声音描述） */
 export function removeCharacterMapping(name) {
     const map = characterMap();
-    if (name && map[name]) { delete map[name]; persist(); }
+    const key = cardKeyOf(name) || String(name || '').trim();
+    if (key && map[key]) { delete map[key]; persist(); }
 }
 
 /** 读取某角色已注册的“声音描述”（BTTS-AddRole） */
 export function voiceDescriptionOf(name) {
-    const map = characterMap();
-    if (name && map[name]) return String(map[name].voiceDescription || '').trim();
+    const m = getCharacterMapping(name);
+    if (m) return String(m.voiceDescription || '').trim();
     return '';
-}
-
-export function getCharacterMapping(name) {
-    const map = characterMap();
-    if (name && map[name]) return map[name];
-    return {};
 }
 
 /** 依据角色名 + 全局默认，解析最终使用的音色/语言/语速 */
