@@ -176,7 +176,7 @@ export function buildSettingsHtml(opts = {}) {
       <div class="btts-hint">
         提示词会引导模型把角色台词输出为函数调用格式
         <code>[[BetterTTS: {&quot;text&quot;:&quot;…&quot;,&quot;character&quot;:&quot;…&quot;,&quot;voice&quot;:&quot;…&quot;,&quot;rate&quot;:1,&quot;emotion&quot;:&quot;…&quot;,&quot;language&quot;:&quot;…&quot;}]]</code>，
-        再由前端正则替换为语音卡片。留空 = 使用内置模板。
+        再由前端正则替换为语音卡片。<b>内容为空时会自动填入内置（系统）提示词并显示在下方</b>，可直接查看与编辑。
       </div>
       <div class="btts-inline">
         <label class="btts-check"><input type="checkbox" data-key="prompt.enabled">启用提示词</label>
@@ -192,7 +192,7 @@ export function buildSettingsHtml(opts = {}) {
       <div class="btts-field">
         <label>提示词内容</label>
         <textarea data-key="prompt.text" class="text_pole btts-inp btts-ta-lg" spellcheck="false"
-          placeholder="（留空使用内置模板）"></textarea>
+          placeholder="（内置系统提示词内容已自动填入，可在此修改）"></textarea>
       </div>
       <div class="btts-inline">
         <button type="button" class="menu_button btts-btn btts-prompt-reset">恢复默认模板</button>
@@ -373,9 +373,9 @@ export function bindSettings(rootEl, hooks = {}) {
 
     // 提示词按钮
     el('.btts-prompt-reset')?.addEventListener('click', () => {
-        setByPath('prompt.text', '');
+        setByPath('prompt.text', DEFAULT_PROMPT_TEXT);
         refreshAll();
-        notify('已恢复为内置默认模板');
+        notify('已填入内置（系统）提示词内容');
     });
     el('.btts-prompt-copy')?.addEventListener('click', async () => {
         const { copyText } = await import('./util.js');
@@ -397,6 +397,7 @@ export function bindSettings(rootEl, hooks = {}) {
                 if (typeof text === 'string') content = text;
             }
         } catch { /* 纯文本 */ }
+        if (!content.trim()) content = DEFAULT_PROMPT_TEXT; // 空文件 → 内置内容
         setByPath('prompt.text', content);
         refreshAll();
         notify('提示词已导入');

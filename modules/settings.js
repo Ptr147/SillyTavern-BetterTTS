@@ -1,6 +1,6 @@
 // BetterTTS - 配置数据管理（读写 extension_settings.betterTTS）
 
-import { DEFAULTS, SETTINGS_KEY } from './defaults.js';
+import { DEFAULTS, SETTINGS_KEY, DEFAULT_PROMPT_TEXT } from './defaults.js';
 import { prettyJson, safeParse } from './util.js';
 
 let extensionSettings = null; // ST 的 extension_settings 对象
@@ -35,7 +35,8 @@ export function mergeDeep(target, defaults) {
     return out;
 }
 
-/** 用默认值补全当前配置（原地修改 + 返回） */
+/** 用默认值补全当前配置（原地修改 + 返回）
+ *  规则：提示词为空时自动填入内置（系统）提示词内容，保证设置面板里能看到并可编辑。 */
 export function hydrate() {
     if (!extensionSettings) return data;
     const current = extensionSettings[SETTINGS_KEY];
@@ -44,6 +45,9 @@ export function hydrate() {
     merged.rate = Math.min(2, Math.max(0.5, Number(merged.rate) || 1));
     merged.volume = Math.min(1, Math.max(0, Number(merged.volume) || 1));
     merged.schemaVersion = DEFAULTS.schemaVersion;
+    // 提示词为空 → 填充内置系统提示词（用户可在面板中直接查看/修改）
+    if (!merged.prompt || typeof merged.prompt !== 'object') merged.prompt = structuredClone(DEFAULTS.prompt);
+    if (!String(merged.prompt.text || '').trim()) merged.prompt.text = DEFAULT_PROMPT_TEXT;
     extensionSettings[SETTINGS_KEY] = merged;
     data = merged;
     return data;
