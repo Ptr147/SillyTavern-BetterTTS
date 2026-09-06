@@ -7,8 +7,8 @@
 
 import { nowClock } from './util.js';
 
-/** 是否存在语音/角色调用标记 */
-const HAS_MARKER_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*(?::-|-)/i;
+/** 是否存在语音/角色调用标记（冒号=语音，连字符=AddRole） */
+const HAS_MARKER_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*(:|-)/i;
 /** 语音调用完整匹配 */
 const CALL_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*:\s*(\{[\s\S]*?\})\s*\]\]/gi;
 /** 角色注册调用完整匹配（含可能被 <br>/换行切分的内容） */
@@ -45,6 +45,7 @@ function esc(s) {
 function chipHtml({ key, character, emotion, payload, text, time }) {
     const speaker = character ? `<span class="btts-seg-speaker">${esc(character)}</span>` : '';
     return `<span class="btts-seg" data-key="${esc(key)}" data-payload="${esc(payload)}" data-char="${esc(character || '')}" data-emotion="${esc(emotion || '')}" role="button" tabindex="0" title="点击播放/暂停 · 右键更多操作">`
+        + `<span class="btts-seg-ind" aria-hidden="true"></span>`
         + speaker
         + `<span class="btts-quote btts-quote-open" aria-hidden="true">“</span>`
         + `<span class="btts-seg-text">${esc(text)}</span>`

@@ -56,6 +56,26 @@
     color: var(--btts-speaker-color);
 }
 
+/* 播放状态小圆点（平时透明；播放中主色闪烁） */
+.mes .btts-seg-ind {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin: 0 4px 0 0;
+    background: transparent;
+    vertical-align: middle;
+}
+.mes .btts-seg.btts-playing .btts-seg-ind {
+    background: var(--btts-main, #3b7dd8);
+    animation: btts-blink 0.8s ease-in-out infinite;
+}
+.mes .btts-seg.btts-paused .btts-seg-ind {
+    background: var(--btts-muted);
+    opacity: 0.6;
+}
+@keyframes btts-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
 /* 稍微加大的引号 “ ”：使用独立颜色 */
 .mes .btts-quote {
     font-size: 1.2em;
@@ -253,15 +273,16 @@
 #btts-crows { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
 .btts-crow {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 6px 8px;
     padding: 7px 8px;
     border-radius: 10px;
     background: var(--btts-card-bg);
     border: 1px solid var(--btts-border);
 }
 .btts-crow-name {
-    flex: 0 0 150px;
+    flex: 0 0 130px;
     min-width: 0;
     font-weight: 700;
     font-size: 0.88em;
@@ -269,16 +290,23 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.btts-crow-fields { display: flex; flex: 1; gap: 6px; align-items: center; flex-wrap: wrap; }
-.btts-crow-voice { flex: 1 1 170px; min-width: 120px; }
+.btts-crow-fields { display: flex; flex: 1 1 380px; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.btts-crow-voice { flex: 1 1 150px; min-width: 110px; }
 .btts-crow-lang { flex: 0 1 auto; }
+.btts-crow-desc {
+    flex: 1 1 100%;
+    font-size: 0.8em;
+    color: var(--btts-muted);
+}
 .btts-crow-play, .btts-crow-clear {
+    flex: 0 0 auto;
     background: none;
     border: 1px solid var(--btts-border);
     border-radius: 8px;
-    padding: 3px 8px;
+    padding: 3px 9px;
     cursor: pointer;
     font-size: 0.85em;
+    min-width: 0;
 }
 .btts-crow-play:hover { background: var(--btts-main); color: #fff; border-color: transparent; }
 .btts-crow-clear:hover { background: var(--btts-em, #c0392b); color: #fff; border-color: transparent; }

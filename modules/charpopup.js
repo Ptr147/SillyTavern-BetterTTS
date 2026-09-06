@@ -57,6 +57,7 @@ let callbacks = {};
 function rowHtml(name, map, isNarrator) {
     const voice = (map && map.voice) || '';
     const lang = (map && map.language) || '';
+    const desc = (map && map.voiceDescription) || '';
     return `
     <div class="btts-crow" data-name="${escapeAttr(name)}">
       <div class="btts-crow-name" title="${escapeAttr(name)}">${escapeHtml(isNarrator ? '旁白 / 默认' : name)}</div>
@@ -68,8 +69,11 @@ function rowHtml(name, map, isNarrator) {
           ${langOptionsHtml(lang)}
         </select>
         <button type="button" class="btts-crow-play menu_button" title="试听">▶</button>
-        <button type="button" class="btts-crow-clear menu_button" title="清除该行映射">✕</button>
+        <button type="button" class="btts-crow-clear menu_button" title="清除该行映射（含声音描述）">✕</button>
       </div>
+      <input class="btts-crow-desc text_pole" type="text" data-field="desc"
+             placeholder="声音描述（来自 BTTS-AddRole 注册，可修改；用于拼成语音系统指令）"
+             value="${escapeAttr(desc)}">
     </div>`;
 }
 
@@ -182,7 +186,8 @@ export function openCharacterPopup(opts = {}) {
                 const name = r.dataset.name;
                 const voice = r.querySelector('[data-field="voice"]')?.value || '';
                 const lang = r.querySelector('[data-field="language"]')?.value || '';
-                settings.setCharacterMapping(name, { voice, language: lang });
+                const desc = r.querySelector('[data-field="desc"]')?.value || '';
+                settings.setCharacterMapping(name, { voice, language: lang, voiceDescription: desc });
             });
             if (callbacks.onMappingChanged) callbacks.onMappingChanged();
         }, 250);
@@ -225,6 +230,7 @@ function snapshotRows() {
         snap[r.dataset.name] = {
             voice: r.querySelector('[data-field="voice"]')?.value || '',
             language: r.querySelector('[data-field="language"]')?.value || '',
+            voiceDescription: r.querySelector('[data-field="desc"]')?.value || '',
         };
     });
     return snap;
