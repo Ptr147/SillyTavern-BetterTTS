@@ -35,6 +35,15 @@ export class BetterTTSPlayer {
         for (const l of this._listeners) { try { l(key, status, extra); } catch { /* ignore */ } }
     }
 
+    /** 发出某条目的状态（主 key + 别名 key，供气泡高亮） */
+    _emitEntry(entry, status, extra = {}) {
+        if (!entry) return;
+        this._emit(entry.key, status, extra);
+        if (Array.isArray(entry.aliasKeys)) {
+            for (const a of entry.aliasKeys) this._emit(a, status, extra);
+        }
+    }
+
     /** 某 key 当前 UI 状态 */
     getState(key) {
         if (this.current && this.current.key === key) {
@@ -62,11 +71,11 @@ export class BetterTTSPlayer {
         if (opts.startNow) {
             // 打断当前，清空队列后插到最前
             this._stopCurrent();
-            for (const q of this.queue) this._emit(q.key, PlayerStatus.STOPPED);
+            for (const q of this.queue) this._emitEntry(q, PlayerStatus.STOPPED);
             this.queue = [];
         }
         this.queue.push(entry);
-        this._emit(entry.key, PlayerStatus.QUEUED);
+        this._emitEntry(entry, PlayerStatus.QUEUED);
         this._drain();
     }
 
@@ -79,7 +88,7 @@ export class BetterTTSPlayer {
                 const entry = this.queue.shift();
                 this.current = entry;
                 entry.ready = false;
-                this._emit(entry.key, PlayerStatus.LOADING);
+                this._emitEntry(entry, PlayerStatus.LOADING);
                 try {
                     const blobs = await entry.synth();
                     if (!Array.isArray(blobs) || !blobs.length) throw new Error('没有返回音频数据');
@@ -91,7 +100,7 @@ export class BetterTTSPlayer {
                     if (this.current !== entry) return;
                     this.current = null;
                     const msg = e?.message || String(e);
-                    this._emit(entry.key, PlayerStatus.ERROR, { message: msg });
+                    this._emitEntry(entry, PlayerStatus.ERROR, { message: msg });
                     if (this._onError) { try { this._onError(entry, msg); } catch { /* ignore */ } }
                 }
             }
@@ -113,7 +122,7 @@ export class BetterTTSPlayer {
         if (this.current === entry) {
             this.current = null;
             this._paused = false;
-            this._emit(entry.key, PlayerStatus.ENDED);
+            this._emitEntry(entry, PlayerStatus.ENDED);
         }
     }
 
@@ -144,20 +153,20 @@ export class BetterTTSPlayer {
                 if (this.current === entry) {
                     this.current = null;
                     const msg = '音频解码/播放失败（' + (entry.mime ? extFromMime(entry.mime) : '未知格式') + '）';
-                    this._emit(entry.key, PlayerStatus.ERROR, { message: msg });
+                    this._emitEntry(entry, PlayerStatus.ERROR, { message: msg });
                     if (this._onError) { try { this._onError(entry, msg); } catch { /* ignore */ } }
                 }
             };
 
             audio.play().then(() => {
                 if (this.current !== entry) { try { audio.pause(); } catch { /* ignore */ } return; }
-                this._emit(entry.key, PlayerStatus.PLAYING);
+                this._emitEntry(entry, PlayerStatus.PLAYING);
             }).catch((e) => {
                 if (this.current !== entry) return; // 已停止，忽略
                 done(false);
                 this.current = null;
                 const msg = '浏览器阻止了自动播放，请点击卡片手动播放（' + (e?.message || e) + '）';
-                this._emit(entry.key, PlayerStatus.ERROR, { message: msg });
+                this._emitEntry(entry, PlayerStatus.ERROR, { message: msg });
                 if (this._onError) { try { this._onError(entry, msg); } catch { /* ignore */ } }
             });
         });
@@ -179,13 +188,13 @@ export class BetterTTSPlayer {
         this._cleanupAudio(entry);
         this.current = null;
         this._paused = false;
-        this._emit(entry.key, PlayerStatus.STOPPED);
+        this._emitEntry(entry, PlayerStatus.STOPPED);
     }
 
     /** 全部停止并清空队列 */
     stopAll() {
         this._stopCurrent();
-        for (const q of this.queue) this._emit(q.key, PlayerStatus.STOPPED);
+        for (const q of this.queue) this._emitEntry(q, PlayerStatus.STOPPED);
         this.queue = [];
     }
 
@@ -195,7 +204,7 @@ export class BetterTTSPlayer {
         const idx = this.queue.findIndex(e => e.key === key);
         if (idx >= 0) {
             const [removed] = this.queue.splice(idx, 1);
-            this._emit(removed.key, PlayerStatus.STOPPED);
+            this._emitEntry(removed, PlayerStatus.STOPPED);
         }
     }
 
@@ -215,11 +224,11 @@ export class BetterTTSPlayer {
                     }
                 }
                 this._paused = false;
-                this._emit(key, PlayerStatus.PLAYING);
+                this._emitEntry(this.current, PlayerStatus.PLAYING);
             } else {
                 this._paused = true;
                 try { this.current.audio?.pause(); } catch { /* ignore */ }
-                this._emit(key, PlayerStatus.PAUSED);
+                this._emitEntry(this.current, PlayerStatus.PAUSED);
             }
             return;
         }

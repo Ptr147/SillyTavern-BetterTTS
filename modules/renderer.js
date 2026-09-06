@@ -87,21 +87,28 @@ function tryParseObj(payloadHtml) {
     try { return JSON.parse(clean); } catch { return null; }
 }
 
+/** 每条消息在本次会话内的唯一序号（不依赖 ST 的 data-message-id） */
+let mesSeqCounter = 0;
+const mesSeqMap = new WeakMap();
+function seqFor(mesEl) {
+    if (!mesSeqMap.has(mesEl)) mesSeqMap.set(mesEl, ++mesSeqCounter);
+    return mesSeqMap.get(mesEl);
+}
+
 /**
  * 在“叶子文本容器”上做正则整段替换。
  * @param {HTMLElement} el 不含仍带调用的子元素的最深层容器
+ * @param {()=>string} nextKey 生成下一条气泡的唯一 key
  * @returns {number} 替换的调用数
  */
-function processTextContainer(el) {
+function processTextContainer(el, nextKey) {
     const html0 = el.innerHTML || '';
     if (!PREFIX_RE.test(html0)) return 0;
-    const mesId = mesIdOf(el);
 
     const re = new RegExp(CALL_RE.source, 'gi');
     let out = '';
     let last = 0;
     let inserted = 0;
-    let segPos = 0;
     let m;
 
     while ((m = re.exec(html0)) !== null) {
@@ -134,13 +141,14 @@ function processTextContainer(el) {
         }
         const character = String(obj.character || obj.name || '').trim();
         const emotion = String(obj.emotion || '').trim();
+        const payload = payloadText(obj);
 
         out += html0.slice(last, m.index);
         out += chipHtml({
-            key: `seg:${mesId}:${segPos++}`,
+            key: nextKey(),
             character,
             emotion,
-            payload: payloadText(obj),
+            payload,
             text,
             time: nowClock(),
         });
@@ -154,7 +162,7 @@ function processTextContainer(el) {
 }
 
 /** 由对象生成“去掉前缀”的规范 JSON（存进属性，避免正则二次匹配） */
-function payloadText(obj) {
+export function payloadText(obj) {
     const fields = {};
     if (obj.character || obj.name) fields.character = obj.character || obj.name;
     if (obj.voice) fields.voice = obj.voice;
@@ -169,14 +177,28 @@ export function wholeCallText(obj) {
     return '[[BetterTTS: ' + payloadText(obj) + ']]';
 }
 
+/** 在可见气泡中按规范 payload 找同一声音段的气泡 key（供自动朗读高亮） */
+export function findChipKeyByPayload(payload) {
+    if (!payload) return null;
+    for (const chip of document.querySelectorAll('.mes .btts-seg')) {
+        if (chip.dataset.payload === payload) return chip.dataset.key || null;
+    }
+    return null;
+}
+
 /**
  * 渲染一个消息根（.mes 或任意包含调用的元素）。
  * 逐层下钻到“叶子文本容器”，避免整条消息重建。
+ * 每个气泡 key = m<消息唯一序号>:<段号>，仅与所属消息绑定。
  * @returns {number} 本次替换数量
  */
 export function renderElement(root) {
     if (!root || root.nodeType !== 1) return 0;
     const markerIn = (el) => el && typeof el.innerHTML === 'string' && PREFIX_RE.test(el.innerHTML);
+    if (!markerIn(root)) return 0;
+    const mesEl = root.classList?.contains('mes') ? root : (root.closest ? root.closest('.mes') || root : root);
+    const seq = seqFor(mesEl);
+    let pos = 0;
     let total = 0;
 
     const walk = (el) => {
@@ -186,7 +208,7 @@ export function renderElement(root) {
             for (const k of kids) walk(k);
             return;
         }
-        try { total += processTextContainer(el); } catch { /* ignore */ }
+        try { total += processTextContainer(el, () => `m${seq}:${pos++}`); } catch { /* ignore */ }
     };
     walk(root);
     return total;

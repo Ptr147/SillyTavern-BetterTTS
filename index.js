@@ -185,6 +185,8 @@ function entryForCall(callObj, key, speakerName = '') {
                 character,
             }, s);
             if (!r.ok) throw new Error(r.message);
+            logDebug('合成成功(角色)', text.slice(0, 16),
+                r.blobs.map(b => ({ mime: b.mime, size: b.blob?.size })));
             return r.blobs;
         },
     };
@@ -208,6 +210,8 @@ function entryForText(text, key, character = NARRATOR_KEY) {
                 character,
             }, s);
             if (!r.ok) throw new Error(r.message);
+            logDebug('合成成功(文本)', text.slice(0, 16),
+                r.blobs.map(b => ({ mime: b.mime, size: b.blob?.size })));
             return r.blobs;
         },
     };
@@ -250,7 +254,9 @@ function callEntries(mes) {
             if (!c.obj) continue;
             const obj = parser.normalizeCall(c.obj, {});
             if (!obj.text) continue;
-            out.push(entryForCall(obj, `seg:${mesId}:${c.pos}`, speaker));
+            const entry = entryForCall(obj, `seg:${mesId}:${c.pos}`, speaker);
+            entry.payloadText = renderer.payloadText(c.obj);
+            out.push(entry);
         }
         return out;
     }
@@ -273,7 +279,9 @@ function callEntries(mes) {
     }
     for (const g of groups) {
         const merged = { ...g.obj, text: g.texts.join('。') };
-        out.push(entryForCall(merged, `seg:${mesId}:${g.startPos}`, g.character));
+        const entry = entryForCall(merged, `seg:${mesId}:${g.startPos}`, g.character);
+        entry.payloadText = renderer.payloadText(merged);
+        out.push(entry);
     }
     return out;
 }
@@ -313,6 +321,12 @@ async function autoHandleMessage(mes, { allowCalls, allowNarr, streamingNow }) {
     if (allowCalls) {
         const entries = callEntries(mes);
         for (const e of entries) {
+            // 若能找到对应已渲染气泡（按内容匹配），把它作为别名 key → 播放时只高亮该气泡
+            if (e.payloadText) {
+                const chipKey = renderer.findChipKeyByPayload(e.payloadText);
+                if (chipKey) e.aliasKeys = [chipKey];
+                delete e.payloadText;
+            }
             const hkey = base + '|' + e.key;
             if (handledCalls.has(hkey)) continue;
             handledCalls.add(hkey);
