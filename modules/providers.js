@@ -249,13 +249,13 @@ async function openaiSynthesize(request, cfg) {
     if (!base) throw new Error('请先在设置里填写 OpenAI 兼容服务的 baseUrl');
     const model = cfg.model || 'tts-1';
     const speed = clamp(num(request.rate, 1), 0.25, 4.0);
-    // defaultVoice 默认留空：优先调用 voice；都没有时先不带 voice 发（部分服务用自身默认音色），
-    // 若 400 报缺 voice 再回落官方 'alloy'。
+    // defaultVoice 默认留空：优先调用 voice；两者都没有 → 请求体不带 voice 字段（由服务端用自己的默认音色）。
+    // 绝不擅自使用 'alloy'。
     const requestedVoice = (request.voice || cfg.defaultVoice || '').trim();
     const headers = { 'Content-Type': 'application/json' };
     if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey.trim();
 
-    const candidates = requestedVoice ? [requestedVoice] : ['', 'alloy'];
+    const candidates = requestedVoice ? [requestedVoice] : [''];
     let res = null;
     let lastErr = null;
     for (const voiceVal of candidates) {
@@ -265,7 +265,7 @@ async function openaiSynthesize(request, cfg) {
         if (request.instruction && cfg.autoInstructions !== false) {
             body.instructions = String(request.instruction).trim();
         } else if (cfg.sendInstructions) {
-            const instructions = fillTemplate(cfg.instructionsTemplate || '', { ...request, voice: voiceVal || 'alloy', rate: speed });
+            const instructions = fillTemplate(cfg.instructionsTemplate || '', { ...request, voice: voiceVal || '', rate: speed });
             if (instructions.trim()) body.instructions = instructions.trim();
         }
         try {
@@ -278,11 +278,16 @@ async function openaiSynthesize(request, cfg) {
             let detail = '';
             try { detail = (await res.text()).slice(0, 300); } catch { /* ignore */ }
             lastErr = new Error('HTTP ' + res.status + ' ' + detail);
-            continue; // 无 voice 尝试 400 → 再试 alloy
+            continue;
         }
         break; // 成功
     }
-    if (!res || !res.ok) throw (lastErr || new Error('请求失败（' + base + '）'));
+    if (!res || !res.ok) {
+        if (!requestedVoice) {
+            lastErr = new Error((lastErr?.message || '') + '｜未配置 voice：该服务可能需要显式 voice 字段，请在设置中填写 defaultVoice（如 tts-1 的服务音色）。');
+        }
+        throw (lastErr || new Error('请求失败（' + base + '）'));
+    }
     let blob = await res.blob();
     let mime = blob.type || (cfg.responseFormat === 'wav' || cfg.responseFormat === 'pcm' ? 'audio/wav' : 'audio/mpeg');
     const ct = (res.headers.get('content-type') || '').toLowerCase();

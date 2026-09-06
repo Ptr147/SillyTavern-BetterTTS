@@ -45,7 +45,7 @@ export const DEFAULTS = {
             apiKey: '',
             model: 'tts-1',
             responseFormat: 'mp3', // mp3 | opus | aac | flac | wav | pcm
-            defaultVoice: '',     // 默认留空：由调用 voice 决定，空时回落 alloy（或服务端默认）
+            defaultVoice: '',     // 默认留空：请求体不带 voice，使用服务端默认音色
             autoInstructions: true, // 自动把“角色声音描述 + 情绪”拼接为系统指令 instructions 发送
             sendInstructions: false, // 发送 instructions（gpt-4o-mini-tts 等支持情感）
             instructionsTemplate: '{{emotion}} 的语气朗读以下内容。',

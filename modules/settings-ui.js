@@ -44,7 +44,7 @@ const PROVIDER_UI = {
       </div>
       <div class="btts-field">
         <label>默认音色 defaultVoice（默认留空）</label>
-        <input type="text" data-path="providers.openai.defaultVoice" class="text_pole btts-inp" placeholder="留空 = 使用调用 voice；调用也没有时回落 alloy/服务端默认">
+        <input type="text" data-path="providers.openai.defaultVoice" class="text_pole btts-inp" placeholder="留空 = 不带 voice 字段（使用服务端默认音色）">
       </div>
       <div class="btts-field">
         <label>音频格式 response_format（mp3/wav/opus/aac/flac/pcm）</label>
