@@ -889,25 +889,27 @@ function injectStatusText(res) {
     return t;
 }
 
-const ROLE_PROMPT_NAME = EXT_NAME + '-角色注册'; // 独立的 BTTS-AddRole 系统提示词条目
+// 注入条目标识（数值前缀保证提示词排序：角色注册规则在最前，随后是当前模式提示词）
+const ROLE_PROMPT_NAME = 'BetterTTS-00-角色注册';
+const MODE_PROMPT_NAME = 'BetterTTS-01-语音';
 
 /** 单次注册（失败不打断，返回结果）
- *  注入两条：① 当前合成模式提示词（说话/全文）② 角色注册规则（默认都注入） */
+ *  注入两条（顺序：角色规则 → 当前模式）：AddRole 规则固定在前，模式提示词随之 */
 async function tryInjectPrompt() {
     const s = settings.get();
     const primaryEnabled = promptApi.promptEnabled(s) && promptApi.promptShouldInject(s);
     const roleEnabled = primaryEnabled && promptApi.rolePromptInject(s);
 
-    const primary = await promptApi.registerNamedInjection(s, {
-        name: EXT_NAME,
-        text: promptApi.promptTextOf(s),
-        enabled: primaryEnabled,
-        getContext: ctx,
-    });
     const role = await promptApi.registerNamedInjection(s, {
         name: ROLE_PROMPT_NAME,
         text: promptApi.rolePromptTextOf(s),
         enabled: roleEnabled,
+        getContext: ctx,
+    });
+    const primary = await promptApi.registerNamedInjection(s, {
+        name: MODE_PROMPT_NAME,
+        text: promptApi.promptTextOf(s),
+        enabled: primaryEnabled,
         getContext: ctx,
     });
     return {

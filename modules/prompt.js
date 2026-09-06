@@ -75,7 +75,9 @@ export async function registerNamedInjection(s, { name, text, enabled = true, ge
         const entry = ctx.extensionPrompts && ctx.extensionPrompts[name];
         const stored = entry ? String(entry.value ?? '') : '';
         const depthOk = entry && Number.isFinite(Number(entry.depth));
-        const matchOk = stored && stored.trim().startsWith(value.slice(0, 32));
+        const norm = (x) => String(x ?? '').replace(/\s+/g, ' ').trim();
+        const head = norm(value.slice(0, 24));
+        const matchOk = stored && head && norm(stored).includes(head);
         out.ok = !!entry && depthOk && !!matchOk;
         out.method = 'ctx.setExtensionPrompt(key,value,position,depth=0)';
         out.entry = entry ? {
@@ -85,7 +87,7 @@ export async function registerNamedInjection(s, { name, text, enabled = true, ge
             scan: !!entry.scan,
             valueLen: stored.length,
         } : null;
-        if (!out.ok) out.error = '调用后未能读到有效条目（extensionPrompts["' + name + '"] 为空/参数无效/内容不一致）';
+        if (!out.ok) out.error = '调用后未能读到有效条目（extensionPrompts["' + name + '"] 为空/参数无效/内容不一致）。存储值开头：' + stored.slice(0, 60);
         return out;
     } catch (e) {
         out.error = String(e?.message || e);
