@@ -1,20 +1,25 @@
-// BetterTTS - 聊天消息前端渲染
-// 把消息 DOM 中形如 [[BetterTTS: {...}]] 的“语音调用”正则替换为可交互卡片：
-//   - 显示 说话内容 + 右上角小字时间
-//   - 点击 播放/暂停
-//   - 右键 弹出菜单（复制完整调用原文 / 复制文本等）
-// 同时提供 MutationObserver，自动处理：新消息、流式生成中的增量刷新、
-// 消息编辑、切换聊天后的重新渲染。
+// BetterTTS - 聊天消息前端渲染（正则替换实现）
+//
+// 做法：对消息文本 HTML 用正则整体匹配 [[BetterTTS: {…}]]（允许跨行、允许中间的 <br> 等标签），
+// 把“函数调用”字符串级替换为渲染好的气泡 HTML：
+//   - 说话内容 + 右上角小字时间
+//   - 点击 播放/暂停（document 级委托，见 index.js）
+//   - 右键 弹出菜单（复制完整函数调用 / 复制文本等，见 index.js）
+//
+// 兼容多行/被标签切分的调用：捕获后先剥离标签、解码实体再 JSON.parse，
+// 因此不依赖调用是否“恰好完整落在一个文本节点”内。
 
 import { nowClock } from './util.js';
-import { findCalls } from './parser.js';
 
 const PREFIX_RE = /\[\[\s*BetterTTS\s*:/i;
+// 匹配一个完整的调用（含可能出现在中间的空格/换行/<br> 等）
+const CALL_RE = /\[\[\s*BetterTTS\s*:\s*(\{[\s\S]*?\})\s*\]\]/gi;
 
-let _mesIdResolver = null; // (el) => string 由 index 注入，用于得到消息 id
+let _mesIdResolver = null; // (el) => string 由 index 注入（可选）
 
 export function setMesIdResolver(fn) { _mesIdResolver = fn; }
 
+/** 取消息 id（优先注入解析器，其次 .mes 的 data-message-id） */
 export function mesIdOf(el) {
     if (_mesIdResolver) {
         try { const id = _mesIdResolver(el); if (id !== undefined && id !== null) return String(id); } catch { /* ignore */ }
@@ -27,68 +32,29 @@ export function mesIdOf(el) {
     return 'x';
 }
 
-/** 判读一个文本片段是否为调用标记 */
-export function hasMarkerInText(text) {
-    return typeof text === 'string' && PREFIX_RE.test(text);
-}
-
 // ---------------------------------------------------------------------
-// 卡片构建
+// 图标
 // ---------------------------------------------------------------------
-
 const PLAY_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 const PAUSE_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
 const LOAD_ICON = '<svg class="btts-spin" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10h-2.4A7.6 7.6 0 1 1 12 4.4z"/></svg>';
 
-function buildChip({ key, character, emotion, text, raw, time }) {
-    const seg = document.createElement('div');
-    seg.className = 'btts-seg';
-    seg.dataset.key = key;
-    seg.dataset.raw = raw;
-    seg.dataset.char = character || '';
-    seg.dataset.emotion = emotion || '';
-    seg.setAttribute('tabindex', '0');
-    seg.setAttribute('role', 'button');
-    seg.setAttribute('aria-label', (character ? character + '：' : '') + '语音，点击播放或暂停');
-    seg.title = '点击播放/暂停 · 右键更多操作';
+function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btts-seg-play';
-    btn.setAttribute('aria-hidden', 'true');
-    btn.innerHTML = PLAY_ICON;
-
-    const body = document.createElement('div');
-    body.className = 'btts-seg-body';
-
-    const head = document.createElement('div');
-    head.className = 'btts-seg-head';
-    const charEl = document.createElement('span');
-    charEl.className = 'btts-seg-char';
-    charEl.textContent = character || '语音';
-    if (emotion) {
-        const emoEl = document.createElement('span');
-        emoEl.className = 'btts-seg-emotion';
-        emoEl.textContent = emotion;
-        head.appendChild(charEl);
-        head.appendChild(emoEl);
-    } else {
-        head.appendChild(charEl);
-    }
-    const timeEl = document.createElement('time');
-    timeEl.className = 'btts-seg-time';
-    timeEl.textContent = time || nowClock();
-    head.appendChild(timeEl);
-
-    const textEl = document.createElement('div');
-    textEl.className = 'btts-seg-text';
-    textEl.textContent = text;
-
-    body.appendChild(head);
-    body.appendChild(textEl);
-    seg.appendChild(btn);
-    seg.appendChild(body);
-    return seg;
+/** 构造气泡 HTML */
+function chipHtml({ key, character, emotion, text, raw, time }) {
+    const headInner = `<span class="btts-seg-char">${esc(character || '语音')}</span>`
+        + (emotion ? `<span class="btts-seg-emotion">${esc(emotion)}</span>` : '')
+        + `<time class="btts-seg-time">${esc(time || nowClock())}</time>`;
+    return `<div class="btts-seg" data-key="${esc(key)}" data-raw="${esc(raw)}" data-char="${esc(character || '')}" data-emotion="${esc(emotion || '')}" role="button" tabindex="0" title="点击播放/暂停 · 右键更多操作">
+      <button type="button" class="btts-seg-play" aria-hidden="true">${PLAY_ICON}</button>
+      <div class="btts-seg-body">
+        <div class="btts-seg-head">${headInner}</div>
+        <div class="btts-seg-text">${esc(text)}</div>
+      </div>
+    </div>`;
 }
 
 /** 更新卡片图标状态（由播放器状态驱动） */
@@ -116,110 +82,133 @@ export function setChipState(chip, status) {
 }
 
 // ---------------------------------------------------------------------
-// 单条消息元素处理：把文本节点中的调用替换成卡片
+// 正则替换核心
 // ---------------------------------------------------------------------
 
-function collectTextNodes(root) {
-    const out = [];
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-    let n;
-    while ((n = walker.nextNode())) {
-        if (n.nodeValue && PREFIX_RE.test(n.nodeValue)) out.push(n);
-    }
-    return out;
+/** 把带标签的片段解码为纯文本：<br>→\n、剥离其余标签、解码实体 */
+function fragmentToText(html) {
+    try {
+        const d = document.createElement('div');
+        d.innerHTML = String(html).replace(/<br\s*\/?>/gi, '\n');
+        return d.textContent ?? '';
+    } catch { return String(html).replace(/<[^>]+>/g, ''); }
 }
 
-/** 由原始文本片段推导卡片主文案（JSON 无效时按简写处理） */
-function chipFromRaw(raw, payloadText) {
-    let obj = null;
-    try { obj = JSON.parse(payloadText); } catch { obj = null; }
-    if (!obj || typeof obj !== 'object') {
-        const text = payloadText.replace(/^[\s"']+|[\s"']+$/g, '');
-        if (!text) return null;
-        obj = { text, character: '', voice: '', rate: 0, emotion: '', language: '' };
-    }
-    const text = String(obj.text ?? '').trim();
-    if (!text) return null;
-    return {
-        obj,
-        text,
-        character: String(obj.character || obj.name || '').trim(),
-        emotion: String(obj.emotion || '').trim(),
-    };
+function tryParseObj(payloadHtml) {
+    const clean = fragmentToText(payloadHtml).trim();
+    if (!clean) return null;
+    try { return JSON.parse(clean); } catch { return null; }
 }
 
 /**
- * 在一条消息的 .mes_text 元素内做“正则替换”：
- * 将 [[BetterTTS: {...}]] 替换成渲染好的卡片。
- * 卡片 key 与“自动朗读”使用的 key 一致（seg:<消息id>:<第N个调用>），
- * 使自动播放时卡片能同步高亮。
- * @returns {number} 本次插入的卡片数量
+ * 在“叶子文本容器”上做正则整段替换。
+ * @param {HTMLElement} el 不含仍带调用的子元素的最深层容器
+ * @returns {number} 替换的调用数
  */
-export function renderElement(el) {
-    if (!el || el.nodeType !== 1) return 0;
+function processTextContainer(el) {
+    const html0 = el.innerHTML || '';
+    if (!PREFIX_RE.test(html0)) return 0;
     const mesId = mesIdOf(el);
-    const nodes = collectTextNodes(el);
-    if (!nodes.length) return 0;
 
+    const re = new RegExp(CALL_RE.source, 'gi');
+    let out = '';
+    let last = 0;
     let inserted = 0;
-    let segPos = 0; // 跨文本节点累计的调用序号（与 parser.findCalls 的 pos 对齐）
+    let segPos = 0;
+    let m;
 
-    for (const node of nodes) {
-        const full = node.nodeValue;
-        const calls = findCalls(full); // 该文本节点内完整闭合的调用（含位置与解析结果）
-        if (!calls.length) continue;
-        const frag = document.createDocumentFragment();
-        let last = 0;
-        let replacedInNode = false;
+    while ((m = re.exec(html0)) !== null) {
+        const matchAll = m[0];
+        const payloadHtml = m[1];
+        // 先尝试标准 JSON；失败再尝试整段解码（兼容被标签切碎的情况）
+        let obj = tryParseObj(payloadHtml);
+        if (!obj) {
+            const whole = fragmentToText(matchAll);
+            const inner = whole.replace(/^\[\[\s*BetterTTS\s*:\s*/, '').replace(/\s*\]\]$/, '');
+            obj = tryParseObj(inner);
+        }
+        if (!obj) {
+            // 解析失败：保留原文，不消耗序号
+            out += html0.slice(last, m.index + matchAll.length);
+            last = m.index + matchAll.length;
+            continue;
+        }
+        const text = String(obj.text ?? '').trim();
+        if (!text) {
+            out += html0.slice(last, m.index + matchAll.length);
+            last = m.index + matchAll.length;
+            continue;
+        }
+        const character = String(obj.character || obj.name || '').trim();
+        const emotion = String(obj.emotion || '').trim();
+        const raw = wholeCallText(obj);
 
-        for (const c of calls) {
-            if (c.start > last) {
-                frag.appendChild(document.createTextNode(full.slice(last, c.start)));
-            }
-            const chipInfo = chipFromRaw(c.raw, c.payload);
-            if (!chipInfo) {
-                // 无效调用保留原文（排查用），不占用序号
-                frag.appendChild(document.createTextNode(c.raw));
-                last = c.end;
-                continue;
-            }
-            const key = `seg:${mesId}:${segPos++}`;
-            frag.appendChild(buildChip({
-                key,
-                character: chipInfo.character,
-                emotion: chipInfo.emotion,
-                text: chipInfo.text,
-                raw: c.raw,
-                time: nowClock(),
-            }));
-            last = c.end;
-            replacedInNode = true;
-            inserted++;
-        }
-        if (replacedInNode) {
-            if (last < full.length) frag.appendChild(document.createTextNode(full.slice(last)));
-            node.parentNode?.replaceChild(frag, node);
-        }
+        out += html0.slice(last, m.index);
+        out += chipHtml({
+            key: `seg:${mesId}:${segPos++}`,
+            character,
+            emotion,
+            text,
+            raw,
+            time: nowClock(),
+        });
+        last = m.index + matchAll.length;
+        inserted++;
+    }
+    if (inserted) {
+        el.innerHTML = out + html0.slice(last);
     }
     return inserted;
 }
 
+/** 由对象生成规范的完整调用文本（用于右键“复制完整函数调用”） */
+function wholeCallText(obj) {
+    const fields = {};
+    if (obj.character || obj.name) fields.character = obj.character || obj.name;
+    if (obj.voice) fields.voice = obj.voice;
+    if (obj.rate !== undefined && obj.rate !== null && obj.rate !== '') fields.rate = obj.rate;
+    if (obj.emotion) fields.emotion = obj.emotion;
+    if (obj.language) fields.language = obj.language;
+    const payload = JSON.stringify({ text: String(obj.text ?? ''), ...fields });
+    return '[[BetterTTS: ' + payload + ']]';
+}
+
+/**
+ * 渲染一个消息根（.mes 或任意包含调用的元素）。
+ * 逐层下钻到“叶子文本容器”，避免整条消息重建。
+ * @returns {number} 本次替换数量
+ */
+export function renderElement(root) {
+    if (!root || root.nodeType !== 1) return 0;
+    const markerIn = (el) => el && typeof el.innerHTML === 'string' && PREFIX_RE.test(el.innerHTML);
+    let total = 0;
+
+    const walk = (el) => {
+        if (!markerIn(el)) return;
+        const kids = Array.from(el.children || []).filter(k => markerIn(k));
+        if (kids.length) {
+            for (const k of kids) walk(k);
+            return;
+        }
+        try { total += processTextContainer(el); } catch { /* ignore */ }
+    };
+    walk(root);
+    return total;
+}
+
 // ---------------------------------------------------------------------
-// MutationObserver 封装（不依赖 .mes_text/#chat 等具体类名/id）
+// MutationObserver 封装（不依赖具体容器类名）
 // ---------------------------------------------------------------------
 
-/** 把一个节点解析为“消息根”（.mes 或离它最近的 .mes） */
 function mesRootOf(node) {
     if (!node || node.nodeType !== 1) return null;
     if (typeof node.classList === 'object' && node.classList.contains('mes')) return node;
     return node.closest ? (node.closest('.mes') || null) : null;
 }
 
-/** 把可能包含消息的节点加入待处理集合（含其内部的全部 .mes） */
 function pushMesRoots(node, pending) {
     const root = mesRootOf(node);
     if (root) { pending.add(root); return; }
-    // 整个容器被重建/首屏加载时：addedNodes 可能是大的包装节点
     const inner = node.querySelectorAll ? node.querySelectorAll('.mes') : [];
     for (const m of inner) pending.add(m);
 }
@@ -246,7 +235,6 @@ export function createChatObserver(onChangedElements) {
                 if (el) pending.add(el);
                 continue;
             }
-            // childList / subtree
             if (mu.target?.nodeType === 1) pushMesRoots(mu.target, pending);
             for (const node of mu.addedNodes || []) {
                 if (node.nodeType === 1) pushMesRoots(node, pending);
@@ -284,13 +272,13 @@ export function scrubMarkdown(text) {
         .replace(/~~([^~]+)~~/g, '$1')
         .replace(/^#{1,6}\s*/gm, '')
         .replace(/^\s*>\s?/gm, '')
-               .replace(/[*_~]/g, '')
+        .replace(/[*_~]/g, '')
         .replace(/[ \t]+/g, ' ')
         .trim();
 }
 
 /**
- * 把当前页面可见聊天里的语音卡片还原成原始函数调用文本
+ * 把当前可见聊天里的语音卡片还原成原始函数调用文本
  * （禁用扩展 / 需要看到原始内容时调用）
  */
 export function revertVisibleChips() {
@@ -302,7 +290,7 @@ export function revertVisibleChips() {
     });
 }
 
-/** 全量扫描当前可见的所有消息（幂等），把函数调用替换成气泡卡片 */
+/** 全量扫描当前可见的所有消息（幂等） */
 export function scanVisible() {
     let count = 0;
     for (const mes of document.querySelectorAll('.mes')) {
