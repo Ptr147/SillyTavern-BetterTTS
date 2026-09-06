@@ -329,7 +329,10 @@ async function customSynthesize(request, cfg) {
     if (!urlTpl) throw new Error('请先在设置里填写自定义接口的 URL 模板');
     const vars = buildVars(request);
     const method = (cfg.method || 'POST').toUpperCase();
-    const url = fillTemplate(urlTpl, vars);
+    // URL 中的占位符需要 URL 编码（中文/空格等）
+    const encodedVars = {};
+    for (const [k, v] of Object.entries(vars)) encodedVars[k] = encodeURIComponent(String(v));
+    const url = fillTemplate(urlTpl, encodedVars);
 
     const headers = {};
     try {
