@@ -90,18 +90,47 @@
     user-select: none;
 }
 
-/* 播放/暂停/加载/出错状态：高亮 + 呼吸 */
+/* 播放状态效果 */
+/* 正在播放：主色底晕染 + 发光描边 + 底部从左到右扫描的光条 */
 .mes .btts-seg.btts-playing {
-    border-color: var(--btts-main);
-    animation: btts-breathe 1.2s ease-in-out infinite;
+    background: color-mix(in srgb, var(--btts-main, #3b7dd8) 15%, var(--btts-card-bg));
+    border-color: var(--btts-main, #3b7dd8);
+    animation: btts-glow 1.2s ease-in-out infinite;
 }
-.mes .btts-seg.btts-paused { opacity: 0.72; }
-.mes .btts-seg.btts-loading { border-style: dashed; }
-.mes .btts-seg.btts-error { border-color: var(--btts-em, #c0392b); background: color-mix(in srgb, var(--btts-em, #c0392b) 10%, transparent); }
+.mes .btts-seg.btts-playing::after {
+    content: '';
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--btts-main, #3b7dd8);
+    transform-origin: left center;
+    animation: btts-scan 1.2s linear infinite;
+}
+.mes .btts-seg.btts-paused {
+    opacity: 0.68;
+    filter: saturate(0.6);
+}
+.mes .btts-seg.btts-loading {
+    border-style: dashed;
+    opacity: 0.85;
+}
+.mes .btts-seg.btts-error {
+    border-color: var(--btts-em, #c0392b);
+    background: color-mix(in srgb, var(--btts-em, #c0392b) 10%, transparent);
+}
 
-@keyframes btts-breathe {
-    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--btts-main, #3b7dd8) 40%, transparent); }
-    50% { box-shadow: 0 0 0 4px transparent; }
+@keyframes btts-glow {
+    0%, 100% { box-shadow: 0 0 2px color-mix(in srgb, var(--btts-main, #3b7dd8) 30%, transparent); }
+    50% { box-shadow: 0 0 10px 2px color-mix(in srgb, var(--btts-main, #3b7dd8) 55%, transparent); }
+}
+@keyframes btts-scan {
+    0% { transform: scaleX(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: scaleX(1); opacity: 0; }
 }
 
 /* ============================================================================
