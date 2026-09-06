@@ -43,18 +43,13 @@ function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-/** 构造气泡 HTML */
-function chipHtml({ key, character, emotion, text, raw, time }) {
-    const headInner = `<span class="btts-seg-char">${esc(character || '语音')}</span>`
-        + (emotion ? `<span class="btts-seg-emotion">${esc(emotion)}</span>` : '')
-        + `<time class="btts-seg-time">${esc(time || nowClock())}</time>`;
-    return `<div class="btts-seg" data-key="${esc(key)}" data-raw="${esc(raw)}" data-char="${esc(character || '')}" data-emotion="${esc(emotion || '')}" role="button" tabindex="0" title="点击播放/暂停 · 右键更多操作">
-      <button type="button" class="btts-seg-play" aria-hidden="true">${PLAY_ICON}</button>
-      <div class="btts-seg-body">
-        <div class="btts-seg-head">${headInner}</div>
-        <div class="btts-seg-text">${esc(text)}</div>
-      </div>
-    </div>`;
+/** 构造内联气泡 HTML（span，融入文字流；属性只存不含 [[ 前缀的 JSON，避免被自身正则二次匹配） */
+function chipHtml({ key, character, emotion, payload, text, time }) {
+    return `<span class="btts-seg" data-key="${esc(key)}" data-payload="${esc(payload)}" data-char="${esc(character || '')}" data-emotion="${esc(emotion || '')}" role="button" tabindex="0" title="点击播放/暂停 · 右键更多操作">`
+        + `<button type="button" class="btts-seg-play" aria-hidden="true">${PLAY_ICON}</button>`
+        + `<span class="btts-seg-text">${esc(text)}</span>`
+        + `<time class="btts-seg-time">${esc(time || nowClock())}</time>`
+        + `</span>`;
 }
 
 /** 更新卡片图标状态（由播放器状态驱动） */
@@ -94,6 +89,13 @@ function fragmentToText(html) {
     } catch { return String(html).replace(/<[^>]+>/g, ''); }
 }
 
+/** 判断位置是否位于某个开始标签/属性内部（防止误匹配属性值） */
+function insideTag(html, index) {
+    const lt = html.lastIndexOf('<', index);
+    const gt = html.lastIndexOf('>', index);
+    return lt > gt;
+}
+
 function tryParseObj(payloadHtml) {
     const clean = fragmentToText(payloadHtml).trim();
     if (!clean) return null;
@@ -118,6 +120,12 @@ function processTextContainer(el) {
     let m;
 
     while ((m = re.exec(html0)) !== null) {
+        if (insideTag(html0, m.index)) {
+            // 命中在标签/属性内部：保留原文，继续向后找
+            out += html0.slice(last, m.index + m[0].length);
+            last = m.index + m[0].length;
+            continue;
+        }
         const matchAll = m[0];
         const payloadHtml = m[1];
         // 先尝试标准 JSON；失败再尝试整段解码（兼容被标签切碎的情况）
@@ -141,15 +149,14 @@ function processTextContainer(el) {
         }
         const character = String(obj.character || obj.name || '').trim();
         const emotion = String(obj.emotion || '').trim();
-        const raw = wholeCallText(obj);
 
         out += html0.slice(last, m.index);
         out += chipHtml({
             key: `seg:${mesId}:${segPos++}`,
             character,
             emotion,
+            payload: payloadText(obj),
             text,
-            raw,
             time: nowClock(),
         });
         last = m.index + matchAll.length;
@@ -161,16 +168,20 @@ function processTextContainer(el) {
     return inserted;
 }
 
-/** 由对象生成规范的完整调用文本（用于右键“复制完整函数调用”） */
-function wholeCallText(obj) {
+/** 由对象生成“去掉前缀”的规范 JSON（存进属性，避免正则二次匹配） */
+function payloadText(obj) {
     const fields = {};
     if (obj.character || obj.name) fields.character = obj.character || obj.name;
     if (obj.voice) fields.voice = obj.voice;
     if (obj.rate !== undefined && obj.rate !== null && obj.rate !== '') fields.rate = obj.rate;
     if (obj.emotion) fields.emotion = obj.emotion;
     if (obj.language) fields.language = obj.language;
-    const payload = JSON.stringify({ text: String(obj.text ?? ''), ...fields });
-    return '[[BetterTTS: ' + payload + ']]';
+    return JSON.stringify({ text: String(obj.text ?? ''), ...fields });
+}
+
+/** 生成完整的调用文本（右键“复制完整函数调用”用） */
+export function wholeCallText(obj) {
+    return '[[BetterTTS: ' + payloadText(obj) + ']]';
 }
 
 /**
@@ -283,9 +294,9 @@ export function scrubMarkdown(text) {
  */
 export function revertVisibleChips() {
     document.querySelectorAll('.mes .btts-seg').forEach(chip => {
-        const raw = chip.dataset.raw;
-        if (raw === undefined) return;
-        const textNode = document.createTextNode(raw);
+        const payload = chip.dataset.payload || chip.dataset.raw || '';
+        const call = payload.trim().startsWith('[[BetterTTS') ? payload : '[[BetterTTS: ' + payload + ']]';
+        const textNode = document.createTextNode(call);
         chip.replaceWith(textNode);
     });
 }

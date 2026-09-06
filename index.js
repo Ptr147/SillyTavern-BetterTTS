@@ -429,13 +429,22 @@ document.addEventListener('contextmenu', (e) => {
 }, true); // capture：抢在 ST 消息右键菜单前
 
 function entryFromChip(chip) {
-    const raw = chip.dataset.raw || '';
-    const calls = parser.findCalls(raw);
-    if (calls.length && calls[0].obj) {
-        const obj = parser.normalizeCall(calls[0].obj, {});
-        return entryForCall(obj, chip.dataset.key, chip.dataset.char);
+    const payload = chip.dataset.payload || chip.dataset.raw || '';
+    let obj = null;
+    if (payload.trim().startsWith('[[BetterTTS')) {
+        const calls = parser.findCalls(payload);
+        if (calls.length && calls[0].obj) obj = calls[0].obj;
+    } else {
+        try {
+            const parsed = JSON.parse(payload);
+            if (parsed && typeof parsed === 'object') obj = parsed;
+        } catch { /* ignore */ }
     }
-    // 兜底：直接读卡片文本
+    if (obj) {
+        const norm = parser.normalizeCall(obj, {});
+        return entryForCall(norm, chip.dataset.key, chip.dataset.char);
+    }
+    // 兜底：直接读气泡文本
     const text = (chip.querySelector('.btts-seg-text')?.textContent || '').trim();
     return entryForText(text, chip.dataset.key, chip.dataset.char || NARRATOR_KEY);
 }
@@ -443,14 +452,15 @@ function entryFromChip(chip) {
 let menuEl = null;
 function showChipMenu(chip, x, y) {
     hideChipMenu();
-    const raw = chip.dataset.raw || '';
+    const payload = chip.dataset.payload || chip.dataset.raw || '';
+    const rawCall = payload.trim().startsWith('[[BetterTTS') ? payload : '[[BetterTTS: ' + payload + ']]';
     const text = chip.querySelector('.btts-seg-text')?.textContent || '';
     menuEl = document.createElement('div');
     menuEl.className = 'btts-menu';
     const items = [
         { label: '▶ 播放 / ⏸ 暂停', act: () => player.toggle(chip.dataset.key, () => entryFromChip(chip)) },
         { label: '🔁 立即朗读（打断当前）', act: () => player.enqueue(entryFromChip(chip), { startNow: true }) },
-        { label: '📋 复制完整函数调用', act: () => copyText(raw).then(ok => notify(ok ? '已复制完整函数调用' : '复制失败', ok ? 'success' : 'error')) },
+        { label: '📋 复制完整函数调用', act: () => copyText(rawCall).then(ok => notify(ok ? '已复制完整函数调用' : '复制失败', ok ? 'success' : 'error')) },
         { label: '📄 复制语音文本', act: () => copyText(text).then(ok => notify(ok ? '已复制语音文本' : '复制失败', ok ? 'success' : 'error')) },
         { label: '⏹ 停止朗读', act: () => player.stopAll() },
     ];

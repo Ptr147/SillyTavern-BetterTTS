@@ -1,8 +1,10 @@
 /* ============================================================================
-   BetterTTS - 鏍峰紡
-   鑷姩璺熼殢 SillyTavern 涓婚锛堜娇鐢ㄥ叾 CSS 鍙橀噺锛岀己澶辨椂鏈夊畨鍏ㄥ洖閫€鍊硷級锛?   鍏奸【娣辫壊/娴呰壊涓庡涓婚锛涘闇€娣卞害瀹氬埗锛屽彲鍦ㄨ缃?鈫?楂樼骇 鈫?鑷畾涔?CSS 涓鐩栥€?   ========================================================================== */
+   BetterTTS - 样式
+   自动跟随 SillyTavern 主题（使用其 CSS 变量，缺失时有安全回退值），
+   兼顾深色/浅色与多主题；如需深度定制，可在设置 → 高级 → 自定义 CSS 中覆盖。
+   ========================================================================== */
 
-/* ---------- 鍙橀噺鍥為€€ ---------- */
+/* ---------- 变量回退 ---------- */
 .btts-settings, .btts-modal-root, .btts-popup-root, .mes .btts-seg, .btts-menu {
     --btts-body: var(--SmartThemeBodyColor, #3b3b3b);
     --btts-main: var(--SmartThemeMainColor, #3b7dd8);
@@ -11,116 +13,100 @@
     --btts-em: var(--SmartThemeEmColor, #d84b5c);
     --btts-border: color-mix(in srgb, var(--SmartThemeBodyColor, #666) 18%, transparent);
     --btts-card-bg: color-mix(in srgb, var(--SmartThemeQuoteColor, #f0f0f0) 42%, transparent);
-    --btts-card-bg-hover: color-mix(in srgb, var(--SmartThemeQuoteColor, #f0f0f0) 65%, transparent);
+    --btts-card-bg-hover: color-mix(in srgb, var(--SmartThemeQuoteColor, #f0f0f0) 68%, transparent);
     --btts-muted: color-mix(in srgb, var(--SmartThemeBodyColor, #3b3b3b) 55%, transparent);
 }
 
 /* ============================================================================
-   璇煶鍗＄墖锛堣亰澶╂秷鎭唴锛?   ========================================================================== */
+   内联语音气泡（融入文字流，不独占整行）
+   类似“引号”效果：略放大的气泡包围台词；右上角小字为时间
+   ========================================================================== */
 .mes .btts-seg {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    margin: 7px 0;
-    padding: 7px 10px 8px 8px;
-    border: 1px solid var(--btts-border);
-    border-left: 3px solid var(--btts-main, #3b7dd8);
+    display: inline;
+    position: relative;
+    margin: 0 2px;
+    padding: 1px 8px 2px 4px;
     border-radius: 12px;
     background: var(--btts-card-bg);
+    border: 1px solid var(--btts-border);
     color: var(--btts-body);
     cursor: pointer;
-    font-size: 0.92em;
-    line-height: 1.5;
-    transition: background 0.12s ease, transform 0.06s ease, box-shadow 0.12s ease;
+    font-size: 1.04em;           /* 比正文略大一点，像加大号的引号 */
+    line-height: 1.55;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
     -webkit-tap-highlight-color: transparent;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: background 0.12s ease, box-shadow 0.12s ease;
+    user-select: none;
 }
 .mes .btts-seg:hover {
     background: var(--btts-card-bg-hover);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
 }
-.mes .btts-seg:active { transform: scale(0.995); }
+.mes .btts-seg:active { opacity: 0.85; }
 .mes .btts-seg:focus-visible { outline: 2px solid var(--btts-main, #3b7dd8); outline-offset: 1px; }
 
 .mes .btts-seg-play {
-    flex: 0 0 auto;
-    width: 26px;
-    height: 26px;
-    margin-top: 2px;
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    padding: 0;
+    margin: 0 3px 0 0;
     border: none;
     border-radius: 50%;
     background: var(--btts-main, #3b7dd8);
     color: #fff;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    vertical-align: -2px;
+    line-height: 1;
     cursor: pointer;
-    padding: 0;
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--btts-main, #3b7dd8) 40%, transparent);
 }
-.mes .btts-seg-play svg { fill: currentColor; }
-.mes .btts-seg-body { flex: 1 1 auto; min-width: 0; }
+.mes .btts-seg-play svg {
+    width: 9px;
+    height: 9px;
+    margin: 2px;
+    fill: currentColor;
+    display: block;
+}
 
-.mes .btts-seg-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
+.mes .btts-seg-text {
+    display: inline;
+    color: var(--btts-body);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
-.mes .btts-seg-char {
-    font-weight: 700;
-    font-size: 0.82em;
-    letter-spacing: 0.02em;
-    color: var(--btts-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.mes .btts-seg-emotion {
-    flex: 0 0 auto;
-    font-size: 0.68em;
-    padding: 1px 7px;
-    border-radius: 999px;
-    border: 1px solid var(--btts-border);
-    background: var(--btts-tint);
-    color: var(--btts-muted);
-    white-space: nowrap;
-}
-/* 鍙充笂瑙掑皬瀛楁椂闂?*/
+
+/* 右上角小字时间（悬浮于气泡右上） */
 .mes .btts-seg-time {
-    margin-left: auto;
-    flex: 0 0 auto;
-    font-size: 0.66em;
+    position: absolute;
+    top: -10px;
+    right: -2px;
+    font-size: 0.6em;
+    line-height: 1;
     color: var(--btts-muted);
-    opacity: 0.72;
+    opacity: 0.75;
     font-variant-numeric: tabular-nums;
+    background: transparent;
+    pointer-events: none;
+    white-space: nowrap;
     user-select: none;
 }
-.mes .btts-seg-text {
-    margin-top: 2px;
-    font-size: 0.95em;
-    color: var(--btts-body);
-    word-break: break-word;
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-}
-/* 鎾斁涓殑鍛煎惛鍔ㄧ敾 */
-.mes .btts-seg.btts-playing { border-left-color: var(--btts-main); }
-.mes .btts-seg.btts-playing .btts-seg-play {
-    animation: btts-pulse 1.2s ease-in-out infinite;
-}
+
+/* 播放状态 */
+.mes .btts-seg.btts-playing .btts-seg-play { animation: btts-pulse 1.1s ease-in-out infinite; }
 .mes .btts-seg.btts-error .btts-seg-play { background: var(--btts-em, #c0392b); }
-.mes .btts-seg.btts-paused .btts-seg-play { background: var(--btts-main); opacity: 0.85; }
+.mes .btts-seg.btts-paused .btts-seg-play { background: var(--btts-main); opacity: 0.8; }
+.mes .btts-seg.btts-loading .btts-seg-play { animation: btts-rotate 0.9s linear infinite; }
 
 @keyframes btts-pulse {
     0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--btts-main, #3b7dd8) 45%, transparent); }
-    50% { box-shadow: 0 0 0 6px transparent; }
+    50% { box-shadow: 0 0 0 4px transparent; }
 }
-.btts-spin { animation: btts-rotate 0.9s linear infinite; }
 @keyframes btts-rotate { to { transform: rotate(360deg); } }
+.btts-spin { animation: btts-rotate 0.9s linear infinite; display: inline-block; }
 
 /* ============================================================================
-   搴曢儴閫夐」鏍忔寜閽?   ========================================================================== */
+   底部兜底按钮（仅当找不到“…菜单”时显示）
+   ========================================================================== */
 .btts-bar {
     display: inline-flex;
     align-items: center;
@@ -149,7 +135,7 @@
 }
 
 /* ============================================================================
-   鍙抽敭鑿滃崟
+   右键菜单
    ========================================================================== */
 .btts-menu {
     z-index: 99999;
@@ -172,7 +158,8 @@
 .btts-menu li:hover { background: var(--btts-tint); color: var(--btts-main); }
 
 /* ============================================================================
-   瑙掕壊寮圭獥锛圔etterTTS-瑙掕壊锛?   ========================================================================== */
+   角色弹窗（BetterTTS-角色）
+   ========================================================================== */
 .btts-popup-root {
     position: fixed;
     inset: 0;
@@ -266,16 +253,13 @@
 }
 .btts-crow-play:hover { background: var(--btts-main); color: #fff; border-color: transparent; }
 .btts-crow-clear:hover { background: var(--btts-em, #c0392b); color: #fff; border-color: transparent; }
-.btts-addrow {
-    display: flex;
-    gap: 6px;
-    margin: 8px 0 10px;
-}
+.btts-addrow { display: flex; gap: 6px; margin: 8px 0 10px; }
 .btts-addrow input { flex: 1; min-width: 120px; }
 .btts-addrow .btts-add-name { flex: 0 0 auto; }
 
 /* ============================================================================
-   璁剧疆寮圭獥锛堚殭锛?   ========================================================================== */
+   设置弹窗（⚙）
+   ========================================================================== */
 .btts-modal-root {
     position: fixed;
     inset: 0;
@@ -317,8 +301,9 @@
 .btts-modal-body { overflow-y: auto; padding: 14px 18px; }
 
 /* ============================================================================
-   璁剧疆鍖哄潡锛圫T 鎵╁睍闈㈡澘鍐?& 寮圭獥鍏辩敤锛?   ========================================================================== */
-.btts-settings { font-size: 0.92em; }
+   设置内容（扩展面板 inline-drawer 内 & 弹窗共用）
+   ========================================================================== */
+.btts-settings { font-size: 0.92em; max-width: 100%; min-width: 0; box-sizing: border-box; }
 .btts-settings-head {
     display: flex;
     align-items: baseline;
@@ -336,16 +321,19 @@
     padding: 10px 14px 12px;
     margin: 0 0 14px;
     background: color-mix(in srgb, var(--SmartThemeQuoteColor, #fff) 12%, transparent);
+    min-width: 0;
+    box-sizing: border-box;
 }
 .btts-fs legend {
     font-weight: 700;
     font-size: 0.86em;
     padding: 0 8px;
     color: var(--btts-main);
+    max-width: 100%;
 }
-.btts-field { display: flex; flex-direction: column; gap: 3px; margin: 0 0 9px; }
+.btts-field { display: flex; flex-direction: column; gap: 3px; margin: 0 0 9px; min-width: 0; }
 .btts-field > label { font-size: 0.8em; opacity: 0.85; }
-.btts-inline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 9px; }
+.btts-inline { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 9px; }
 .btts-half { flex: 1 1 220px; }
 .btts-check {
     display: inline-flex;
@@ -354,72 +342,23 @@
     font-size: 0.88em;
     cursor: pointer;
     margin: 0;
+    flex-wrap: nowrap;
 }
-.btts-inp { width: 100%; box-sizing: border-box; font-size: 0.9em; }
-.btts-ta-sm { min-height: 64px; resize: vertical; }
-.btts-ta-lg { min-height: 150px; resize: vertical; font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 0.84em; }
-.btts-hint { font-size: 0.78em; opacity: 0.7; }
-.btts-slider-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 4px 0 10px;
-}
-.btts-slider-row label { font-size: 0.86em; flex: 0 0 auto; min-width: 90px; }
-.btts-slider-row input[type="range"] { flex: 1; }
-.btts-out { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
-.btts-btn { font-size: 0.85em !important; }
-.btts-voice-status, .btts-data-status { font-size: 0.78em; opacity: 0.7; }
-.btts-provider-panel { padding: 4px 2px 2px; }
-
-/* 娣辫壊涓婚杞诲井澧炲己锛圫T 涓昏涓婚閮戒細缁忓彉閲忚嚜鍔ㄩ€傞厤锛涙澶勫厹搴曪級 */
-html.dark .btts-seg { --btts-body: #e6e6e6; }
-
-/* ============================================================================
-   鎶樺彔璁剧疆鍖猴紙ST 鎵╁睍闈㈡澘鍐咃級& 绐勬爮閫傞厤
-   ========================================================================== */
-.btts-collapse {
-    margin: 4px 0 12px;
-    border: 1px solid var(--btts-border);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #fff) 10%, transparent);
-    overflow: hidden;
-}
-.btts-collapse > summary {
-    list-style: none;
-    cursor: pointer;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 4px 12px;
-    padding: 10px 14px;
-    user-select: none;
-}
-.btts-collapse > summary::-webkit-details-marker { display: none; }
-.btts-collapse > summary::before {
-    content: '鈻?;
-    display: inline-block;
-    width: 1em;
-    color: var(--btts-main);
-    transition: transform 0.12s ease;
-}
-.btts-collapse[open] > summary::before { transform: rotate(90deg); }
-.btts-collapse > summary:hover { background: var(--btts-tint); }
-.btts-summary-title { font-weight: 800; font-size: 0.98em; }
-.btts-summary-sub { font-size: 0.76em; opacity: 0.6; }
-.btts-collapse-body { padding: 6px 12px 12px; border-top: 1px solid var(--btts-border); }
-.btts-collapse[open] > summary { border-bottom: none; }
-
-/* 绐勬爮/婧㈠嚭淇锛氶潰鏉垮唴鎵€鏈夋帶浠堕兘鍙備笌鏀剁缉鎹㈣锛岄伩鍏嶆寜閽尋鎴愪竴鍥?*/
-.btts-settings { max-width: 100%; min-width: 0; box-sizing: border-box; }
-.btts-fs { min-width: 0; box-sizing: border-box; }
-.btts-inline { display: flex; flex-wrap: wrap; gap: 8px 12px; }
-.btts-field { min-width: 0; }
-.btts-field > textarea, .btts-field > input, .btts-field > select,
-.btts-inline > select, .btts-inline > input, .btts-slider-row input {
-    max-width: 100%;
+.btts-inp { width: 100%; box-sizing: border-box; font-size: 0.9em; max-width: 100%; }
+.btts-ta-sm { min-height: 64px; resize: vertical; width: 100%; box-sizing: border-box; }
+.btts-ta-lg {
+    min-height: 150px;
+    resize: vertical;
+    font-family: ui-monospace, Consolas, Menlo, monospace;
+    font-size: 0.84em;
+    width: 100%;
     box-sizing: border-box;
 }
+.btts-hint { font-size: 0.78em; opacity: 0.7; }
+.btts-slider-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; flex-wrap: wrap; }
+.btts-slider-row label { font-size: 0.86em; flex: 0 0 auto; min-width: 90px; }
+.btts-slider-row input[type="range"] { flex: 1; min-width: 120px; }
+.btts-out { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
 .btts-btn {
     min-height: 28px;
     padding: 3px 10px;
@@ -428,10 +367,13 @@ html.dark .btts-seg { --btts-body: #e6e6e6; }
     white-space: nowrap;
     flex: 0 0 auto;
 }
-.btts-check { flex-wrap: nowrap; }
-.btts-slider-row { flex-wrap: wrap; }
-.btts-ta-lg, .btts-ta-sm { width: 100%; box-sizing: border-box; font-family: inherit; }
-.btts-fs legend { max-width: 100%; }
+.btts-voice-status, .btts-data-status { font-size: 0.78em; opacity: 0.7; }
+.btts-provider-panel { padding: 4px 2px 2px; }
+
+/* 扩展面板原生 inline-drawer 内的细微修正 */
+.btts-native-ext .inline-drawer-content { padding: 8px 10px; }
+.btts-native-ext .inline-drawer-header { cursor: pointer; }
+
 @media (max-width: 480px) {
     .btts-btn { flex: 1 1 auto; text-align: center; }
 }
