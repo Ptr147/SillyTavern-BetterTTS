@@ -467,3 +467,52 @@
 @media (max-width: 480px) {
     .btts-btn { flex: 1 1 auto; text-align: center; }
 }
+
+
+/* ============================================================================
+   BetterTTS-角色 弹窗：窄屏/移动端适配与按钮可点区域修正
+   ========================================================================== */
+.btts-crow-play, .btts-crow-clear, .btts-add-name, .btts-popup-close {
+    min-width: 40px;
+    min-height: 32px;
+    padding: 4px 12px;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+.btts-popup-body { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.btts-popup-head, .btts-popup-foot { flex-wrap: wrap; }
+
+@media (max-width: 560px) {
+    /* 窄屏：底部抽屉式，占满宽度，避免“只露出下半/顶部被截断” */
+    .btts-popup-root { align-items: flex-end; padding: 0; }
+    .btts-popup {
+        width: 100vw;
+        max-width: 100vw;
+        max-height: 92dvh;
+        max-height: 92vh;
+        border-radius: 16px 16px 0 0;
+    }
+    .btts-popup-head { padding: 14px 14px 8px; }
+    .btts-popup-title { font-size: 1.1em; }
+    .btts-popup-sub { width: 100%; order: 3; margin-top: 2px; }
+    .btts-popup-body { padding: 8px 10px 2px; }
+    .btts-popup-foot { padding: 8px 12px 12px; }
+
+    /* 行内元素纵向堆叠，避免挤压过窄 */
+    .btts-crow { flex-direction: column; align-items: stretch; }
+    .btts-crow-name { flex: 0 0 auto; width: 100%; }
+    .btts-crow-fields { flex: 1 1 auto; }
+    .btts-crow-voice { flex: 1 1 100%; }
+    .btts-crow-lang { flex: 1 1 auto; }
+    .btts-crow-desc { flex: 1 1 100%; }
+    .btts-crow-fields .menu_button { flex: 1 1 auto; text-align: center; }
+    .btts-addrow { flex-wrap: wrap; }
+    .btts-addrow input { flex: 1 1 100%; }
+    .btts-addrow .btts-add-name { flex: 1 1 100%; }
+}
+
+
+/* 弹窗内部滚动区参与弹性收缩，防止内容高时窗口被顶出屏幕（上半被截） */
+.btts-popup-body { flex: 1 1 auto; min-height: 0; }
+.btts-popup-head { flex: 0 0 auto; }
+.btts-popup-foot { flex: 0 0 auto; }
