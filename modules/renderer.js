@@ -90,10 +90,44 @@ function insideTag(html, index) {
     return lt > gt;
 }
 
+/** 把 JSON 字符串值内部的真实换行转义为 \n（模型手写换行时的常见格式问题） */
+function escapeRawNewlinesInStrings(s) {
+    let out = '';
+    let inStr = false;
+    let esc = false;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (inStr) {
+            if (esc) { out += ch; esc = false; continue; }
+            if (ch === '\\') { out += ch; esc = true; continue; }
+            if (ch === '"') { inStr = false; out += ch; continue; }
+            if (ch === '\n' || ch === '\r') { out += '\\n'; continue; }
+            out += ch;
+            continue;
+        }
+        if (ch === '"') inStr = true;
+        out += ch;
+    }
+    return out;
+}
+
 function tryParseObj(payloadHtml) {
     const clean = fragmentToText(payloadHtml).trim();
     if (!clean) return null;
-    try { return JSON.parse(clean); } catch { return null; }
+    const attempt = (s) => {
+        try {
+            const p = JSON.parse(s);
+            if (p && typeof p === 'object' && !Array.isArray(p)) return p;
+        } catch { /* continue */ }
+        return null;
+    };
+    const obj = attempt(clean);
+    if (obj) return obj;
+    // 宽松解析：修正尾逗号/过度转义/字符串内真实换行等常见小瑕疵
+    const fixed = escapeRawNewlinesInStrings(clean)
+        .replace(/,\s*([}\]])/g, '$1')        // 删除尾逗号
+        .replace(/\\{2,}"/g, '\\"');          // 过度转义引号
+    return attempt(fixed);
 }
 
 /** 每条消息在本次会话内的唯一序号（不依赖 ST 的 data-message-id） */
@@ -198,9 +232,19 @@ function processTextContainer(el, nextKey) {
             const whole = fragmentToText(matchAll).replace(/^\[\[\s*(?:BetterTTS|BTTS)(?:\s*-\s*TEXT)?\s*:\s*/, '').replace(/\s*\]\]$/, '');
             obj = tryParseObj(whole);
         }
-        if (!obj) { out += cleaned.slice(last, m.index + m[0].length); last = m.index + m[0].length; continue; }
+        if (!obj) {
+            if (globalThis.__BETTER_TTS_DEBUG__) {
+                try { console.warn('[BetterTTS] 调用 JSON 解析失败，保留原文:', String(fragmentToText(payloadHtml)).slice(0, 240)); } catch { /* ignore */ }
+            }
+            out += cleaned.slice(last, m.index + m[0].length); last = m.index + m[0].length; continue;
+        }
         const text = String(obj.text ?? '').trim();
-        if (!text) { out += cleaned.slice(last, m.index + m[0].length); last = m.index + m[0].length; continue; }
+        if (!text) {
+            if (globalThis.__BETTER_TTS_DEBUG__) {
+                try { console.warn('[BetterTTS] 调用缺少 text，保留原文:', String(fragmentToText(payloadHtml)).slice(0, 200)); } catch { /* ignore */ }
+            }
+            out += cleaned.slice(last, m.index + m[0].length); last = m.index + m[0].length; continue;
+        }
 
         out += cleaned.slice(last, m.index);
         if (isText) {
