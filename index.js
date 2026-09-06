@@ -174,14 +174,22 @@ function avatarForName(name) {
     return null;
 }
 
-/** 查找角色已注册的声音描述（按当前角色卡；含旁白别称） */
+/** 判断是否旁白类名称（含别称） */
+function isNarratorName(name) {
+    return name === NARRATOR_KEY || NARRATOR_ALIASES.includes(name);
+}
+
+/** 查找角色已注册的声音描述（按当前角色卡；旁白走“旁白/默认”条目，再回落默认旁白描述配置） */
 function voiceDescriptionOf(name) {
     if (!name) return '';
-    const candidates = [name, ...(NARRATOR_ALIASES.includes(name) ? [] : NARRATOR_ALIASES)];
-    for (const cand of candidates) {
-        const m = settings.getCharacterMapping(cand);
+    if (isNarratorName(name)) {
+        const m = settings.getCharacterMapping(NARRATOR_KEY);
         if (m && String(m.voiceDescription || '').trim()) return String(m.voiceDescription).trim();
+        const fb = String(settings.get()?.defaults?.narratorVoice || '').trim();
+        if (fb) return fb;
     }
+    const m = settings.getCharacterMapping(name);
+    if (m && String(m.voiceDescription || '').trim()) return String(m.voiceDescription).trim();
     return '';
 }
 
@@ -195,16 +203,18 @@ function buildInstruction(name, emotion) {
     return parts.join('；');
 }
 
-/** 接收前端渲染剥离出的 BTTS-AddRole 注册 */
+/** 接收前端渲染剥离出的 BTTS-AddRole 注册
+ *  旁白类（旁白/叙述者等）统一写入 “旁白/默认” 条目，不另增角色行 */
 function onRoleSeen(obj) {
     try {
-        const name = String(obj?.character || obj?.name || obj?.role || '').trim();
+        let name = String(obj?.character || obj?.name || obj?.role || '').trim();
         const desc = String(obj?.voice || obj?.description || obj?.sound || obj?.desc || '').trim();
         if (!name) return;
+        if (isNarratorName(name)) name = NARRATOR_KEY; // 归一化：旁白 → 旁白/默认
         if (desc) {
             const existing = settings.getCharacterMapping(name);
             settings.setCharacterMapping(name, { ...(existing || {}), voiceDescription: desc });
-            dlog('BTTS-AddRole 注册/更新 音色描述:', name);
+            dlog('BTTS-AddRole 注册/更新 音色描述:', name === NARRATOR_KEY ? '旁白/默认' : name);
         }
     } catch (e) { logDebug('AddRole 处理失败', e); }
 }

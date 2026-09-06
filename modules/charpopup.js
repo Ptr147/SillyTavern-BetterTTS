@@ -3,7 +3,7 @@
 // 数据存于 settings.characters[角色名] = { voice, language }（全局）。
 // 保留键 __narrator__ 表示旁白/默认行。
 
-import { LANGUAGES, NARRATOR_KEY } from './defaults.js';
+import { LANGUAGES, NARRATOR_KEY, NARRATOR_ALIASES } from './defaults.js';
 import * as settings from './settings.js';
 import { debounce } from './util.js';
 import { findCalls } from './parser.js';
@@ -117,9 +117,9 @@ function collectSpeakers() {
         for (const k of Object.keys(map)) {
             if (k === NARRATOR_KEY) continue;
             const label = settings.cardLabelOf(k);
+            if (NARRATOR_ALIASES.includes(label)) continue; // 旁白别称并入“旁白/默认”行，不重复列
             const current = settings.cardKeyOf(label);
-            // 其它角色卡的同名条目不占当前列表（避免跨卡串扰）
-            if (String(k).includes('::') && current !== k) continue;
+            if (String(k).includes('::') && current !== k) continue; // 其它角色卡的同名条目不占当前列表
             add(label);
         }
     } catch { /* ignore */ }

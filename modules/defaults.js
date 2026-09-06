@@ -70,8 +70,9 @@ export const DEFAULTS = {
 
     // ---- 默认发音人/语言（旁白与未配置的角色使用）----
     defaults: {
-        voice: '',        // 留空 = 由 language 推断默认音色
+        voice: '',            // 留空 = 由 language 推断默认音色
         language: 'zh-CN',
+        narratorVoice: '',    // 旁白默认声音描述（旁白/未注册角色朗读时作为系统指令，留空则不附加）
     },
 
     // ---- 角色 → 说话人/语言 映射（跨聊天全局；以角色名称为键）----

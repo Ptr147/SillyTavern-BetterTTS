@@ -176,6 +176,11 @@ export function buildSettingsHtml(opts = {}) {
           <select data-key="defaults.language" class="text_pole btts-inp"><option value="">zh-CN</option>${langOptionsHtml('zh-CN')}</select>
         </label>
       </div>
+      <div class="btts-field">
+        <label>旁白默认声音描述（旁白 / 未注册角色朗读时附加为系统指令，留空不附加）</label>
+        <input type="text" data-key="defaults.narratorVoice" class="text_pole btts-inp"
+          placeholder="例：沉稳、客观、略带叙事感的女播音腔，普通话标准，语速适中">
+      </div>
     </fieldset>
 
     <fieldset class="btts-fs">
