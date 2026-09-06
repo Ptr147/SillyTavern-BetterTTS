@@ -1,0 +1,21 @@
+# --- Node ---
+node_modules/
+
+# --- Local research / scratch (not part of the extension) ---
+.research/
+scratch/
+tmp/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+*.log
+
+# --- SillyTavern local data (never commit user data) ---
+data/
+settings.json
+secrets.json
