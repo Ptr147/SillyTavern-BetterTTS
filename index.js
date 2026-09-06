@@ -506,6 +506,53 @@ function stopAuto() {
 }
 
 // ---------------------------------------------------------------------------
+// 兜底自动朗读监视器（不依赖 ST 生成事件）
+// 通过“最后一条非用户消息的长度变化”推断：在增长=流式生成中（读取已完成的调用），
+// 连续稳定≈2s=生成结束（整段/旁白/全文）。事件可用时两者叠加也安全（已播 key 去重）。
+// ---------------------------------------------------------------------------
+let watchLastSig = null;
+let watchStable = 0;
+let watchEndedSig = '';
+
+function autoWatcherTick() {
+    try {
+        if (!settings.isEnabled()) { watchLastSig = null; watchStable = 0; return; }
+        const mes = lastNonUserMes();
+        if (!mes || typeof mes.mes !== 'string' || !mes.mes.trim()) {
+            watchLastSig = null;
+            watchStable = 0;
+            return;
+        }
+        const key = mesBaseKey(mes);
+        const sig = key + '#' + mes.mes.length;
+        if (sig !== watchLastSig) {
+            const isFirst = watchLastSig === null; // 首次/换聊后的基线，仅记录不触发
+            watchLastSig = sig;
+            watchStable = 0;
+            if (isFirst) return;
+            if (autoOff) autoOff = false; // 检测到新内容 → 恢复自动
+            const s = settings.get();
+            if (s.streaming && s.prompt?.mode !== 'full') {
+                // 边出边读：尽量即时朗读已完整出现的函数调用
+                autoHandleMessage(mes, { allowCalls: true, allowNarr: false, streamingNow: true }).catch(() => { });
+            }
+            return;
+        }
+        if (autoOff) { watchStable = 0; return; }
+        watchStable++;
+        if (watchStable >= 2 && watchEndedSig !== sig) {
+            watchEndedSig = sig;
+            watchStable = 0;
+            autoHandleMessage(mes, { allowCalls: true, allowNarr: true, streamingNow: false }).catch(() => { });
+        }
+    } catch (e) { logDebug('自动朗读监视器异常', e); }
+}
+
+function startAutoWatcher() {
+    setInterval(autoWatcherTick, 900);
+}
+
+// ---------------------------------------------------------------------------
 // 渲染 & 播放器状态同步
 // ---------------------------------------------------------------------------
 const observer = renderer.createChatObserver((elements) => {
@@ -956,6 +1003,9 @@ async function registerSlashCommands() {
 function onChatContextChanged() {
     handledCalls.clear();
     handledNarr.clear();
+    watchLastSig = null;
+    watchStable = 0;
+    watchEndedSig = '';
     ingestRolesFromChat();
     charpopup.refreshOpenPopup();
 }
@@ -1001,6 +1051,7 @@ async function init() {
     // 打开已有聊天时全量渲染一次（幂等）
     setTimeout(scanAllVisible, 600);
     setTimeout(ingestRolesFromChat, 1600); // 载入历史消息后吸收 BTTS-AddRole
+    startAutoWatcher(); // 兜底自动/流式朗读监视器（不依赖 ST 生成事件）
 
     // 设置挂载（立即尝试一次；ST 部分 UI 渲染较晚，配合下方定时重试）
     ensureMounts();
