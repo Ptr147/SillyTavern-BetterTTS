@@ -248,38 +248,41 @@ async function openaiSynthesize(request, cfg) {
     const base = String(cfg.baseUrl || '').trim().replace(/\/+$/, '');
     if (!base) throw new Error('请先在设置里填写 OpenAI 兼容服务的 baseUrl');
     const model = cfg.model || 'tts-1';
-    const voice = request.voice || cfg.defaultVoice || 'alloy';
     const speed = clamp(num(request.rate, 1), 0.25, 4.0);
-
-    const body = {
-        model,
-        input: request.text,
-        voice,
-        speed,
-    };
-    if (cfg.responseFormat && cfg.responseFormat !== 'mp3') body.response_format = cfg.responseFormat;
-    // 系统指令 = “角色声音描述 + 情绪/语气”（由 index 拼接好传入 request.instruction）
-    if (request.instruction && cfg.autoInstructions !== false) {
-        body.instructions = String(request.instruction).trim();
-    } else if (cfg.sendInstructions) {
-        const instructions = fillTemplate(cfg.instructionsTemplate || '', { ...request, voice, rate: speed });
-        if (instructions.trim()) body.instructions = instructions.trim();
-    }
-
+    // defaultVoice 默认留空：优先调用 voice；都没有时先不带 voice 发（部分服务用自身默认音色），
+    // 若 400 报缺 voice 再回落官方 'alloy'。
+    const requestedVoice = (request.voice || cfg.defaultVoice || '').trim();
     const headers = { 'Content-Type': 'application/json' };
     if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey.trim();
 
-    let res;
-    try {
-        res = await fetch(base + '/audio/speech', { method: 'POST', headers, body: JSON.stringify(body) });
-    } catch (e) {
-        throw new Error('请求失败（' + base + '）：' + (e.message || e) + '（CORS/网络问题请检查服务端）');
+    const candidates = requestedVoice ? [requestedVoice] : ['', 'alloy'];
+    let res = null;
+    let lastErr = null;
+    for (const voiceVal of candidates) {
+        const body = { model, input: request.text, speed };
+        if (voiceVal) body.voice = voiceVal;
+        if (cfg.responseFormat && cfg.responseFormat !== 'mp3') body.response_format = cfg.responseFormat;
+        if (request.instruction && cfg.autoInstructions !== false) {
+            body.instructions = String(request.instruction).trim();
+        } else if (cfg.sendInstructions) {
+            const instructions = fillTemplate(cfg.instructionsTemplate || '', { ...request, voice: voiceVal || 'alloy', rate: speed });
+            if (instructions.trim()) body.instructions = instructions.trim();
+        }
+        try {
+            res = await fetch(base + '/audio/speech', { method: 'POST', headers, body: JSON.stringify(body) });
+        } catch (e) {
+            lastErr = new Error('请求失败（' + base + '）：' + (e.message || e) + '（CORS/网络问题请检查服务端）');
+            continue;
+        }
+        if (!res.ok) {
+            let detail = '';
+            try { detail = (await res.text()).slice(0, 300); } catch { /* ignore */ }
+            lastErr = new Error('HTTP ' + res.status + ' ' + detail);
+            continue; // 无 voice 尝试 400 → 再试 alloy
+        }
+        break; // 成功
     }
-    if (!res.ok) {
-        let detail = '';
-        try { detail = (await res.text()).slice(0, 300); } catch { /* ignore */ }
-        throw new Error('HTTP ' + res.status + ' ' + detail);
-    }
+    if (!res || !res.ok) throw (lastErr || new Error('请求失败（' + base + '）'));
     let blob = await res.blob();
     let mime = blob.type || (cfg.responseFormat === 'wav' || cfg.responseFormat === 'pcm' ? 'audio/wav' : 'audio/mpeg');
     const ct = (res.headers.get('content-type') || '').toLowerCase();

@@ -144,9 +144,8 @@ export function resolveParams({ character, voice, language, rate, emotion }) {
     const map = getCharacterMapping(character);
     const finalVoice = String(voice || map.voice || d.defaults.voice || '').trim();
     const finalLanguage = String(language || map.language || d.defaults.language || 'zh-CN').trim() || 'zh-CN';
-    const finalRate = rate !== null && rate !== undefined && Number.isFinite(Number(rate))
-        ? Math.min(2, Math.max(0.5, Number(rate)))
-        : d.rate;
+    const useCallRate = !d.rateLock && rate !== null && rate !== undefined && Number.isFinite(Number(rate));
+    const finalRate = useCallRate ? Math.min(2, Math.max(0.5, Number(rate))) : Math.min(2, Math.max(0.5, Number(d.rate) || 1));
     return {
         voice: finalVoice,
         language: finalLanguage,

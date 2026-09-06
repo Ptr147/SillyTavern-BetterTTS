@@ -16,6 +16,7 @@ export const DEFAULTS = {
     perSegment: true,         // 按段朗读：每个语音调用/句子独立合成播放
     readNarration: false,     // 朗读旁白：没有语音调用的纯叙述文本也要朗读
     rate: 1.0,                // 语速（0.5 ~ 2.0）
+    rateLock: false,          // 语速锁定：忽略函数调用里的 rate，统一使用上面语速
     volume: 1.0,              // 音量（0 ~ 1）
 
     // ---- 提示词 ----
@@ -44,7 +45,7 @@ export const DEFAULTS = {
             apiKey: '',
             model: 'tts-1',
             responseFormat: 'mp3', // mp3 | opus | aac | flac | wav | pcm
-            defaultVoice: 'alloy',
+            defaultVoice: '',     // 默认留空：由调用 voice 决定，空时回落 alloy（或服务端默认）
             autoInstructions: true, // 自动把“角色声音描述 + 情绪”拼接为系统指令 instructions 发送
             sendInstructions: false, // 发送 instructions（gpt-4o-mini-tts 等支持情感）
             instructionsTemplate: '{{emotion}} 的语气朗读以下内容。',

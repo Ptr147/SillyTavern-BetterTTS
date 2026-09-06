@@ -43,8 +43,8 @@ const PROVIDER_UI = {
         <input type="text" data-path="providers.openai.model" class="text_pole btts-inp" placeholder="tts-1 / gpt-4o-mini-tts / gpt-sovits 等">
       </div>
       <div class="btts-field">
-        <label>默认音色 defaultVoice</label>
-        <input type="text" data-path="providers.openai.defaultVoice" class="text_pole btts-inp" placeholder="alloy">
+        <label>默认音色 defaultVoice（默认留空）</label>
+        <input type="text" data-path="providers.openai.defaultVoice" class="text_pole btts-inp" placeholder="留空 = 使用调用 voice；调用也没有时回落 alloy/服务端默认">
       </div>
       <div class="btts-field">
         <label>音频格式 response_format（mp3/wav/opus/aac/flac/pcm）</label>
@@ -128,6 +128,7 @@ export function buildSettingsHtml(opts = {}) {
         <label class="btts-check" title="生成过程中边出边读（逐条）；关闭则等整条消息生成完成后朗读"><input type="checkbox" data-key="streaming">流式播放</label>
         <label class="btts-check" title="多个语音调用/句子逐段独立合成朗读；关闭则同音色内容合并为整段朗读"><input type="checkbox" data-key="perSegment">按段朗读</label>
         <label class="btts-check" title="朗读角色消息中没有语音调用的纯叙述/旁白文本（使用“旁白/默认”音色）"><input type="checkbox" data-key="readNarration">朗读旁白</label>
+        <label class="btts-check" title="开启后忽略函数调用里的 rate，全部按下方“语速”朗读"><input type="checkbox" data-key="rateLock">语速锁定</label>
       </div>
       <div class="btts-slider-row">
         <label>语速 <b class="btts-out" data-out="rate"></b></label>
