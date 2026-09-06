@@ -23,12 +23,23 @@ import * as promptApi from './modules/prompt.js';
 import { player, PlayerStatus } from './modules/player.js';
 import { synthesize } from './modules/providers.js';
 import { debounce, clamp, copyText, nowClock, logDebug } from './modules/util.js';
-import { NARRATOR_KEY } from './modules/defaults.js';
+import { NARRATOR_KEY, EXT_VERSION } from './modules/defaults.js';
 
 const EXT_DISPLAY = 'BetterTTS';
 const EXT_NAME = 'BetterTTS';           // 注入提示词使用的注册名
 const STYLE_ID = 'bettertts-style';
 const USER_CSS_ID = 'bettertts-user-css';
+
+// 模块一旦被 SillyTavern 加载即打标记（无论后续是否报错，都能据此判断“扩展是否被加载”）
+try { globalThis.__BETTER_TTS_LOADED__ = true; } catch { /* ignore */ }
+
+/** 诊断日志：控制台统一前缀，便于定位问题 */
+function dlog(...args) {
+    try { console.info('%c[BetterTTS]', 'color:#7b5cff;font-weight:bold', ...args); } catch { /* ignore */ }
+}
+function derr(...args) {
+    try { console.error('%c[BetterTTS]', 'color:#ff5c5c;font-weight:bold', ...args); } catch { /* ignore */ }
+}
 
 // ---------------------------------------------------------------------------
 // ST 模块动态加载（避免静态依赖缺失导致整个扩展无法启动）
@@ -42,29 +53,27 @@ async function loadStModules() {
         const mod = await import('../../extensions.js');
         extension_settings = mod.extension_settings;
         extGetContext = mod.getContext || null;
+        dlog('import extensions.js OK, extension_settings =', !!extension_settings);
     } catch (e) {
-        console.warn('[BetterTTS] 无法 import extensions.js', e);
+        derr('无法 import ../../extensions.js（请确认本目录位于 public/scripts/extensions/<名称>/）', e);
     }
     try {
         const mod = await import('../../script.js');
         eventSource = mod.eventSource || null;
     } catch (e) {
-        eventSource = null;
+        dlog('script.js 事件源不可用（新版 ST 走 SillyTavern.on）', e?.message || e);
     }
 }
 
-let _ctx = null;
 function ctx() {
+    // 不缓存：每次现取，保证 chat/characters 等引用始终是最新的
     try {
-        if (!_ctx) {
-            if (globalThis.SillyTavern && typeof globalThis.SillyTavern.getContext === 'function') {
-                _ctx = globalThis.SillyTavern.getContext();
-            } else if (extGetContext) {
-                _ctx = extGetContext();
-            }
+        if (globalThis.SillyTavern && typeof globalThis.SillyTavern.getContext === 'function') {
+            return globalThis.SillyTavern.getContext();
         }
-        return _ctx;
-    } catch { return null; }
+        if (extGetContext) return extGetContext();
+    } catch (e) { derr('getContext 失败', e); }
+    return null;
 }
 
 function chatMessages() {
@@ -445,7 +454,7 @@ function hideChipMenu() {
 // ---------------------------------------------------------------------------
 // 底部选项栏按钮
 // ---------------------------------------------------------------------------
-function mountBottomBar() {
+function buildBottomBar() {
     const group = document.createElement('div');
     group.className = 'btts-bar';
 
@@ -475,39 +484,91 @@ function mountBottomBar() {
 
     group.appendChild(btnChar);
     group.appendChild(btnSet);
-
-    // 寻找合适的插入锚点（send 按钮附近/底部输入栏内）
-    const anchor = document.querySelector('#send_but_send') || document.querySelector('#send_form');
-    if (anchor) {
-        if (anchor.id === 'send_but_send') {
-            anchor.parentNode?.insertBefore(group, anchor);
-        } else {
-            anchor.appendChild(group);
-        }
-    } else {
-        document.body.appendChild(group); // 极端兜底
-        group.classList.add('btts-bar-fallback');
-    }
+    group.dataset.mounted = '';
     return group;
+}
+
+let bttsBarEl = null;       // 底部栏按钮组（幂等）
+let barMounted = false;
+
+/**
+ * 把“BetterTTS-角色 / ⚙”按钮放进聊天底部选项栏。
+ * 采用候选锚点 + 幂等 + 可重试策略：某些 ST 版本聊天区较晚渲染。
+ * @returns {boolean} 是否成功挂载
+ */
+function mountBottomBar() {
+    if (barMounted && bttsBarEl && bttsBarEl.isConnected) return true;
+    if (!bttsBarEl) bttsBarEl = buildBottomBar();
+
+    const g = bttsBarEl;
+    const q = (sel) => document.querySelector(sel);
+
+    // 候选锚点（按优先级）：
+    // 1) send 按钮前；2) ST 的 send 工具按钮组；3) options 按钮后；4) 输入栏容器
+    const sendBtn = q('#send_but_send');
+    if (sendBtn) {
+        sendBtn.parentNode?.insertBefore(g, sendBtn);
+        dlog('底部按钮已挂载到 #send_but_send 前');
+        barMounted = true;
+        return true;
+    }
+    const optionsBtn = q('#options_button');
+    if (optionsBtn && optionsBtn.parentNode) {
+        optionsBtn.parentNode.insertBefore(g, optionsBtn.nextSibling);
+        dlog('底部按钮已挂载到 #options_button 后');
+        barMounted = true;
+        return true;
+    }
+    const sendForm = q('#send_form');
+    if (sendForm) {
+        // 放进输入栏（尽量保持可见；若 flex 布局，前置为新一行）
+        sendForm.appendChild(g);
+        dlog('底部按钮已挂载到 #send_form 内（候选锚点未命中，使用兜底位置）');
+        barMounted = true;
+        return true;
+    }
+    // 极端兜底：右下角悬浮
+    if (!g.isConnected) {
+        document.body.appendChild(g);
+        g.classList.add('btts-bar-fallback');
+        dlog('未找到输入栏容器，底部按钮以悬浮形式显示');
+    }
+    barMounted = true;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
 // 设置：ST 扩展面板 + 独立弹窗
 // ---------------------------------------------------------------------------
 const settingsMounts = [];
+let settingsPanelMounted = false;
 
 function mountIntoSettingsPanel() {
-    let host = document.querySelector('#extensions_settings');
-    if (!host) return false;
-    // 防止重复挂载
-    if (host.querySelector('.btts-settings')) return true;
-    const wrap = document.createElement('div');
-    wrap.innerHTML = settingsUI.buildSettingsHtml();
-    const node = wrap.firstElementChild;
-    const api = settingsUI.bindSettings(node, makeUiHooks());
-    host.appendChild(node);
-    if (api) settingsMounts.push(api);
-    return true;
+    if (settingsPanelMounted) return true;
+    const host = document.querySelector('#extensions_settings');
+    if (!host) return false; // ST 尚未渲染该容器，稍后重试
+    if (host.querySelector('.btts-settings')) { settingsPanelMounted = true; return true; }
+    try {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = settingsUI.buildSettingsHtml();
+        const node = wrap.firstElementChild;
+        const api = settingsUI.bindSettings(node, makeUiHooks());
+        host.appendChild(node);
+        if (api) settingsMounts.push(api);
+        settingsPanelMounted = true;
+        dlog('设置面板已挂载到 #extensions_settings');
+        return true;
+    } catch (e) {
+        derr('设置面板挂载失败', e);
+        return false;
+    }
+}
+
+/** 统一尝试挂载（设置面板 + 底部栏），供定时重试用 */
+function ensureMounts() {
+    let ok = mountIntoSettingsPanel();
+    const bar = mountBottomBar();
+    return ok && bar;
 }
 
 let modalEl = null;
@@ -683,9 +744,8 @@ async function init() {
     // 打开已有聊天时全量渲染一次（幂等）
     setTimeout(scanAllVisible, 600);
 
-    // 设置挂载
-    mountIntoSettingsPanel();
-    mountBottomBar();
+    // 设置挂载（立即尝试一次；ST 部分 UI 渲染较晚，配合下方定时重试）
+    ensureMounts();
 
     // 事件
     subscribe('generation_started', onGenerationStart);
@@ -698,14 +758,37 @@ async function init() {
     // 提示词注入 & 命令
     refreshPromptInjection();
     registerSlashCommands();
+
+    dlog('初始化完成：',
+        'enabled=' + settings.isEnabled(),
+        'provider=' + settings.get().provider,
+        '设置面板已挂载=' + settingsPanelMounted,
+        '底部按钮已挂载=' + barMounted);
 }
 
-// ST 的扩展由动态 import 加载，此时 DOM 通常已就绪；双保险等待 readyState
+// ST 的扩展由动态 import 加载；防止意外重复执行（如热更新/重复挂载）
 function boot() {
+    if (globalThis.__BETTER_TTS_BOOTED__) return;
+    globalThis.__BETTER_TTS_BOOTED__ = true;
+    const run = () => init().then(() => {
+        // 兜底重试挂载：面板/聊天区可能晚于扩展脚本出现（最长约 20s）
+        let tries = 0;
+        const timer = setInterval(() => {
+            tries++;
+            const done = ensureMounts();
+            if (done || tries >= 20) {
+                clearInterval(timer);
+                dlog('挂载重试结束：设置面板=' + settingsPanelMounted + ' 底部按钮=' + barMounted);
+            }
+        }, 1000);
+    }).catch(e => {
+        derr('初始化失败（详见下方堆栈；请把这段信息反馈给作者）', e);
+    });
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => init().catch(e => console.error('[BetterTTS] init error', e)));
+        document.addEventListener('DOMContentLoaded', run);
     } else {
-        init().catch(e => console.error('[BetterTTS] init error', e));
+        run();
     }
 }
 boot();
+dlog('模块已加载（BetterTTS v' + EXT_VERSION + '），若你在界面看不到任何 BetterTTS 入口，请检查：1) 目录是否为 public/scripts/extensions/<名字>/；2) 是否重启了 SillyTavern 服务端（不是仅刷新页面）；3) 浏览器控制台是否有上面的红色错误。');
