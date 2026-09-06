@@ -1,0 +1,376 @@
+/* ============================================================================
+   BetterTTS - 样式
+   自动跟随 SillyTavern 主题（使用其 CSS 变量，缺失时有安全回退值），
+   兼顾深色/浅色与多主题；如需深度定制，可在设置 → 高级 → 自定义 CSS 中覆盖。
+   ========================================================================== */
+
+/* ---------- 变量回退 ---------- */
+.btts-settings, .btts-modal-root, .btts-popup-root, #chat .btts-seg, .btts-menu {
+    --btts-body: var(--SmartThemeBodyColor, #3b3b3b);
+    --btts-main: var(--SmartThemeMainColor, #3b7dd8);
+    --btts-tint: var(--SmartThemeBlurTintColor, rgba(120, 120, 120, 0.12));
+    --btts-quote: var(--SmartThemeQuoteColor, #ececec);
+    --btts-em: var(--SmartThemeEmColor, #d84b5c);
+    --btts-border: color-mix(in srgb, var(--SmartThemeBodyColor, #666) 18%, transparent);
+    --btts-card-bg: color-mix(in srgb, var(--SmartThemeQuoteColor, #f0f0f0) 42%, transparent);
+    --btts-card-bg-hover: color-mix(in srgb, var(--SmartThemeQuoteColor, #f0f0f0) 65%, transparent);
+    --btts-muted: color-mix(in srgb, var(--SmartThemeBodyColor, #3b3b3b) 55%, transparent);
+}
+
+/* ============================================================================
+   语音卡片（聊天消息内）
+   ========================================================================== */
+#chat .btts-seg {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 7px 0;
+    padding: 7px 10px 8px 8px;
+    border: 1px solid var(--btts-border);
+    border-left: 3px solid var(--btts-main, #3b7dd8);
+    border-radius: 12px;
+    background: var(--btts-card-bg);
+    color: var(--btts-body);
+    cursor: pointer;
+    font-size: 0.92em;
+    line-height: 1.5;
+    transition: background 0.12s ease, transform 0.06s ease, box-shadow 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+#chat .btts-seg:hover {
+    background: var(--btts-card-bg-hover);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+#chat .btts-seg:active { transform: scale(0.995); }
+#chat .btts-seg:focus-visible { outline: 2px solid var(--btts-main, #3b7dd8); outline-offset: 1px; }
+
+#chat .btts-seg-play {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    margin-top: 2px;
+    border: none;
+    border-radius: 50%;
+    background: var(--btts-main, #3b7dd8);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--btts-main, #3b7dd8) 40%, transparent);
+}
+#chat .btts-seg-play svg { fill: currentColor; }
+#chat .btts-seg-body { flex: 1 1 auto; min-width: 0; }
+
+#chat .btts-seg-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+#chat .btts-seg-char {
+    font-weight: 700;
+    font-size: 0.82em;
+    letter-spacing: 0.02em;
+    color: var(--btts-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#chat .btts-seg-emotion {
+    flex: 0 0 auto;
+    font-size: 0.68em;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--btts-border);
+    background: var(--btts-tint);
+    color: var(--btts-muted);
+    white-space: nowrap;
+}
+/* 右上角小字时间 */
+#chat .btts-seg-time {
+    margin-left: auto;
+    flex: 0 0 auto;
+    font-size: 0.66em;
+    color: var(--btts-muted);
+    opacity: 0.72;
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+}
+#chat .btts-seg-text {
+    margin-top: 2px;
+    font-size: 0.95em;
+    color: var(--btts-body);
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+/* 播放中的呼吸动画 */
+#chat .btts-seg.btts-playing { border-left-color: var(--btts-main); }
+#chat .btts-seg.btts-playing .btts-seg-play {
+    animation: btts-pulse 1.2s ease-in-out infinite;
+}
+#chat .btts-seg.btts-error .btts-seg-play { background: var(--btts-em, #c0392b); }
+#chat .btts-seg.btts-paused .btts-seg-play { background: var(--btts-main); opacity: 0.85; }
+
+@keyframes btts-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--btts-main, #3b7dd8) 45%, transparent); }
+    50% { box-shadow: 0 0 0 6px transparent; }
+}
+.btts-spin { animation: btts-rotate 0.9s linear infinite; }
+@keyframes btts-rotate { to { transform: rotate(360deg); } }
+
+/* ============================================================================
+   底部选项栏按钮
+   ========================================================================== */
+.btts-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 2px 0 6px;
+    vertical-align: middle;
+}
+.btts-bar-btn {
+    padding: 2px 8px !important;
+    font-size: 0.82em !important;
+    white-space: nowrap;
+    border-radius: 999px;
+}
+.btts-bar-btn-icon {
+    padding: 2px 7px !important;
+    font-size: 0.95em !important;
+}
+.btts-bar-fallback {
+    position: fixed;
+    right: 14px;
+    bottom: 88px;
+    z-index: 9000;
+    background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.4));
+    padding: 4px 8px;
+    border-radius: 999px;
+}
+
+/* ============================================================================
+   右键菜单
+   ========================================================================== */
+.btts-menu {
+    z-index: 99999;
+    min-width: 210px;
+    background: var(--SmartThemeChatTintColor, #ffffff);
+    color: var(--btts-body);
+    border: 1px solid var(--btts-border);
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+    padding: 5px;
+    font-size: 0.86em;
+}
+.btts-menu ul { list-style: none; margin: 0; padding: 0; }
+.btts-menu li {
+    padding: 7px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.btts-menu li:hover { background: var(--btts-tint); color: var(--btts-main); }
+
+/* ============================================================================
+   角色弹窗（BetterTTS-角色）
+   ========================================================================== */
+.btts-popup-root {
+    position: fixed;
+    inset: 0;
+    z-index: 30000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+    font-size: 0.95em;
+}
+.btts-popup {
+    width: min(680px, 94vw);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--SmartThemeChatTintColor, #fff);
+    color: var(--btts-body);
+    border-radius: 14px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--btts-border);
+    overflow: hidden;
+}
+.btts-popup-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--btts-border);
+    flex-wrap: wrap;
+}
+.btts-popup-title { font-weight: 800; font-size: 1.05em; }
+.btts-popup-sub { font-size: 0.8em; opacity: 0.7; flex: 1; }
+.btts-popup-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    font-size: 1em;
+    cursor: pointer;
+    color: var(--btts-muted);
+    padding: 2px 6px;
+}
+.btts-popup-close:hover { color: var(--btts-em, #c0392b); }
+.btts-popup-body { padding: 10px 14px 4px; overflow-y: auto; }
+.btts-popup-tip {
+    font-size: 0.78em;
+    opacity: 0.75;
+    margin: 2px 0 10px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--btts-tint);
+}
+.btts-popup-foot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--btts-border);
+}
+.btts-popup-hint { font-size: 0.8em; opacity: 0.7; }
+
+#btts-crows { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
+.btts-crow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 10px;
+    background: var(--btts-card-bg);
+    border: 1px solid var(--btts-border);
+}
+.btts-crow-name {
+    flex: 0 0 150px;
+    min-width: 0;
+    font-weight: 700;
+    font-size: 0.88em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.btts-crow-fields { display: flex; flex: 1; gap: 6px; align-items: center; flex-wrap: wrap; }
+.btts-crow-voice { flex: 1 1 170px; min-width: 120px; }
+.btts-crow-lang { flex: 0 1 auto; }
+.btts-crow-play, .btts-crow-clear {
+    background: none;
+    border: 1px solid var(--btts-border);
+    border-radius: 8px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 0.85em;
+}
+.btts-crow-play:hover { background: var(--btts-main); color: #fff; border-color: transparent; }
+.btts-crow-clear:hover { background: var(--btts-em, #c0392b); color: #fff; border-color: transparent; }
+
+/* ============================================================================
+   设置弹窗（⚙）
+   ========================================================================== */
+.btts-modal-root {
+    position: fixed;
+    inset: 0;
+    z-index: 30001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+}
+.btts-modal {
+    width: min(860px, 96vw);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--SmartThemeChatTintColor, #fff);
+    color: var(--btts-body);
+    border-radius: 14px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--btts-border);
+    overflow: hidden;
+}
+.btts-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--btts-border);
+    font-weight: 800;
+}
+.btts-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1em;
+    color: var(--btts-muted);
+}
+.btts-modal-close:hover { color: var(--btts-em, #c0392b); }
+.btts-modal-body { overflow-y: auto; padding: 14px 18px; }
+
+/* ============================================================================
+   设置区块（ST 扩展面板内 & 弹窗共用）
+   ========================================================================== */
+.btts-settings { font-size: 0.92em; }
+.btts-settings-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+.btts-settings-title { font-weight: 800; font-size: 1.1em; }
+.btts-settings-title em { font-style: normal; font-size: 0.7em; opacity: 0.6; margin-left: 4px; }
+.btts-settings-desc { font-size: 0.8em; opacity: 0.65; }
+
+.btts-fs {
+    border: 1px solid var(--btts-border);
+    border-radius: 12px;
+    padding: 10px 14px 12px;
+    margin: 0 0 14px;
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #fff) 12%, transparent);
+}
+.btts-fs legend {
+    font-weight: 700;
+    font-size: 0.86em;
+    padding: 0 8px;
+    color: var(--btts-main);
+}
+.btts-field { display: flex; flex-direction: column; gap: 3px; margin: 0 0 9px; }
+.btts-field > label { font-size: 0.8em; opacity: 0.85; }
+.btts-inline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 9px; }
+.btts-half { flex: 1 1 220px; }
+.btts-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88em;
+    cursor: pointer;
+    margin: 0;
+}
+.btts-inp { width: 100%; box-sizing: border-box; font-size: 0.9em; }
+.btts-ta-sm { min-height: 64px; resize: vertical; }
+.btts-ta-lg { min-height: 150px; resize: vertical; font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 0.84em; }
+.btts-hint { font-size: 0.78em; opacity: 0.7; }
+.btts-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0 10px;
+}
+.btts-slider-row label { font-size: 0.86em; flex: 0 0 auto; min-width: 90px; }
+.btts-slider-row input[type="range"] { flex: 1; }
+.btts-out { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
+.btts-btn { font-size: 0.85em !important; }
+.btts-voice-status, .btts-data-status { font-size: 0.78em; opacity: 0.7; }
+.btts-provider-panel { padding: 4px 2px 2px; }
+
+/* 深色主题轻微增强（ST 主要主题都会经变量自动适配；此处兜底） */
+html.dark .btts-seg { --btts-body: #e6e6e6; }

@@ -1,0 +1,134 @@
+// BetterTTS - 配置数据管理（读写 extension_settings.betterTTS）
+
+import { DEFAULTS, SETTINGS_KEY } from './defaults.js';
+import { prettyJson, safeParse } from './util.js';
+
+let extensionSettings = null; // ST 的 extension_settings 对象
+let persistFn = null;         // 由 index.js 注入的持久化函数
+let data = null;              // 便捷引用
+
+function isPlainObject(v) {
+    return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+/** 深度合并：defaults 为骨架，target 覆盖之（保留 target 中 defaults 之外的键） */
+export function mergeDeep(target, defaults) {
+    if (!isPlainObject(target)) return structuredClone(defaults);
+    const out = {};
+    // 1) defaults 中的键：target 有则覆盖，无则用默认
+    for (const [k, dv] of Object.entries(defaults)) {
+        const tv = target[k];
+        if (isPlainObject(dv)) {
+            out[k] = isPlainObject(tv) ? mergeDeep(tv, dv) : structuredClone(dv);
+        } else if (tv === undefined) {
+            out[k] = structuredClone(dv);
+        } else {
+            out[k] = tv;
+        }
+    }
+    // 2) target 中 defaults 之外的键：原样保留（例如角色映射、自定义字段）
+    for (const [k, tv] of Object.entries(target)) {
+        if (!(k in defaults)) {
+            out[k] = structuredClone(isPlainObject(tv) ? tv : tv);
+        }
+    }
+    return out;
+}
+
+/** 用默认值补全当前配置（原地修改 + 返回） */
+export function hydrate() {
+    if (!extensionSettings) return data;
+    const current = extensionSettings[SETTINGS_KEY];
+    const merged = mergeDeep(isPlainObject(current) ? current : {}, DEFAULTS);
+    // 数值钳制
+    merged.rate = Math.min(2, Math.max(0.5, Number(merged.rate) || 1));
+    merged.volume = Math.min(1, Math.max(0, Number(merged.volume) || 1));
+    merged.schemaVersion = DEFAULTS.schemaVersion;
+    extensionSettings[SETTINGS_KEY] = merged;
+    data = merged;
+    return data;
+}
+
+/** 绑定 ST extension_settings 并初始化 */
+export function init(extSettings) {
+    extensionSettings = extSettings;
+    if (extensionSettings && !extensionSettings[SETTINGS_KEY]) {
+        extensionSettings[SETTINGS_KEY] = structuredClone(DEFAULTS);
+    }
+    hydrate();
+}
+
+export function setPersist(fn) { persistFn = fn; }
+
+/** 持久化（防抖由注入方负责） */
+export function persist() {
+    try { if (typeof persistFn === 'function') persistFn(); } catch { /* ignore */ }
+}
+
+export function get() { return data; }
+
+export function isEnabled() { return !!data?.enabled; }
+
+/** 导出全部配置（含角色映射、提示词、各服务商参数）的 JSON 字符串 */
+export function exportConfigText() {
+    return prettyJson(data);
+}
+
+/** 从 JSON 文本导入全部配置 */
+export function importConfigText(text) {
+    const parsed = safeParse(text);
+    if (!parsed || typeof parsed !== 'object') return { ok: false, message: '导入失败：不是合法的 JSON 对象' };
+    extensionSettings[SETTINGS_KEY] = mergeDeep(parsed, DEFAULTS);
+    hydrate();
+    persist();
+    return { ok: true, message: '配置已导入' };
+}
+
+/** 恢复默认配置（保留 schema 层级） */
+export function resetConfig() {
+    extensionSettings[SETTINGS_KEY] = structuredClone(DEFAULTS);
+    hydrate();
+    persist();
+    return { ok: true, message: '已恢复默认配置' };
+}
+
+/** 获取角色映射对象（确保存在） */
+export function characterMap() {
+    if (!data.characters || typeof data.characters !== 'object') data.characters = {};
+    return data.characters;
+}
+
+/** 设置某角色（名称）的映射；voice/language 为空字符串表示清空该字段 */
+export function setCharacterMapping(name, mapping) {
+    const map = characterMap();
+    const cleaned = {};
+    if (mapping.voice) cleaned.voice = String(mapping.voice);
+    if (mapping.language) cleaned.language = String(mapping.language);
+    if (Object.keys(cleaned).length) map[name] = cleaned;
+    else delete map[name];
+    persist();
+}
+
+export function getCharacterMapping(name) {
+    const map = characterMap();
+    if (name && map[name]) return map[name];
+    return {};
+}
+
+/** 依据角色名 + 全局默认，解析最终使用的音色/语言/语速 */
+export function resolveParams({ character, voice, language, rate, emotion }) {
+    const d = data || DEFAULTS;
+    const map = getCharacterMapping(character);
+    const finalVoice = String(voice || map.voice || d.defaults.voice || '').trim();
+    const finalLanguage = String(language || map.language || d.defaults.language || 'zh-CN').trim() || 'zh-CN';
+    const finalRate = rate !== null && rate !== undefined && Number.isFinite(Number(rate))
+        ? Math.min(2, Math.max(0.5, Number(rate)))
+        : d.rate;
+    return {
+        voice: finalVoice,
+        language: finalLanguage,
+        rate: finalRate,
+        volume: d.volume,
+        emotion: String(emotion || '').trim(),
+    };
+}
