@@ -138,6 +138,11 @@ export function buildSettingsHtml(opts = {}) {
         <label>音量 <b class="btts-out" data-out="volume"></b></label>
         <input type="range" data-key="volume" min="0.05" max="1" step="0.05">
       </div>
+      <div class="btts-slider-row">
+        <label>合成超时（秒）</label>
+        <input type="number" data-key="synthTimeout" min="5" max="300" step="1" class="text_pole" style="width:90px">
+        <span class="btts-hint">超过该时长未返回音频即跳过本条，避免卡死后续朗读</span>
+      </div>
     </fieldset>
 
     <fieldset class="btts-fs">

@@ -6,6 +6,7 @@
 // 允许跨行、允许中间的 <br> 等标签：捕获后先剥标签、解码实体再 JSON.parse。
 
 import { nowClock } from './util.js';
+import { splitSentences } from './parser.js';
 
 /** 是否存在语音/角色调用标记（冒号=语音，连字符=AddRole） */
 const HAS_MARKER_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*(:|-)/i;
@@ -133,13 +134,18 @@ export function textPayload(obj) {
     return JSON.stringify({ text: String(obj.text ?? ''), ...(clean.length ? { roles: clean } : {}) });
 }
 
-/** 构造段落（全文）极简气泡：几乎透明背景，仅以边框颜色区分 */
-function textChipHtml({ key, payload, text, time }) {
-    return `<span class="btts-seg btts-text-seg" data-kind="text" data-key="${esc(key)}" data-payload="${esc(payload)}" role="button" tabindex="0" title="点击播放/暂停整段 · 右键更多操作">`
+/** 构造段落（全文）句子级极简气泡：几乎透明背景，仅以边框颜色区分；不显示时间避免杂乱 */
+function textChipHtml({ key, payload, text }) {
+    return `<span class="btts-seg btts-text-seg" data-kind="text" data-key="${esc(key)}" data-payload="${esc(payload)}" role="button" tabindex="0" title="点击播放/暂停这句 · 右键更多操作">`
         + `<span class="btts-seg-ind" aria-hidden="true"></span>`
         + `<span class="btts-seg-text">${esc(text)}</span>`
-        + `<time class="btts-seg-time">${esc(time || nowClock())}</time>`
         + `</span>`;
+}
+
+/** 段落文本按句拆分（供渲染使用） */
+function splitForChips(text) {
+    const sents = splitSentences(text);
+    return sents.length ? sents : [text];
 }
 
 /**
@@ -199,7 +205,17 @@ function processTextContainer(el, nextKey) {
 
             out += source.slice(last, m.index);
             if (kind === 'text') {
-                out += textChipHtml({ key: nextKey(), payload: textPayload(obj), text, time: nowClock() });
+                // 段落按句拆成多个极简边框段（每句一个，可单独点击播放）
+                const sents = splitForChips(text);
+                const basePayload = textPayload(obj);
+                sents.forEach((sent, i) => {
+                    out += textChipHtml({
+                        key: nextKey(),
+                        payload: textPayload({ ...obj, text: sent }),
+                        text: sent,
+                    });
+                    if (i < sents.length - 1) out += ' ';
+                });
             } else {
                 const character = String(obj.character || obj.name || '').trim();
                 const emotion = String(obj.emotion || '').trim();

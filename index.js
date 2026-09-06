@@ -1080,6 +1080,7 @@ async function init() {
 
     // 播放器
     player.setVolumeGetter(() => settings.get().volume);
+    player.setTimeoutGetter(() => Math.min(300, Math.max(5, Number(settings.get().synthTimeout) || 45)) * 1000);
     player.setErrorHandler((entry, msg) => notify(msg, 'error'));
     player.onState(onPlayerState);
 

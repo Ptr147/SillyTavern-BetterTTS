@@ -18,6 +18,7 @@ export const DEFAULTS = {
     rate: 1.0,                // 语速（0.5 ~ 2.0）
     rateLock: false,          // 语速锁定：忽略函数调用里的 rate，统一使用上面语速
     volume: 1.0,              // 音量（0 ~ 1）
+    synthTimeout: 45,         // TTS 合成超时（秒，5~300）
 
     // ---- 提示词 ----
     prompt: {

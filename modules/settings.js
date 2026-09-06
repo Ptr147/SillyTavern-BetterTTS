@@ -46,6 +46,9 @@ export function hydrate() {
     let vol = Number(merged.volume);
     if (!Number.isFinite(vol) || vol <= 0) vol = 1;
     merged.volume = Math.min(1, Math.max(0.05, vol));
+    let to = Number(merged.synthTimeout);
+    if (!Number.isFinite(to) || to <= 0) to = 45;
+    merged.synthTimeout = Math.min(300, Math.max(5, to));
     merged.schemaVersion = DEFAULTS.schemaVersion;
     // 提示词为空 → 填充内置（系统）提示词，面板中可直接查看/编辑
     if (!merged.prompt || typeof merged.prompt !== 'object') merged.prompt = structuredClone(DEFAULTS.prompt);

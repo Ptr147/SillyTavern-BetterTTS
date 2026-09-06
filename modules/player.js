@@ -23,11 +23,14 @@ export class BetterTTSPlayer {
         this._drainAgain = false;
         this._listeners = new Set();
         this._volume = () => 1;
+        this._synthTimeout = () => 45000; // 默认 45s
         this._onError = null;
         this._paused = false;
     }
 
     setVolumeGetter(fn) { this._volume = fn; }
+    /** 注入“合成超时(毫秒)”读取器 */
+    setTimeoutGetter(fn) { this._synthTimeout = fn; }
     setErrorHandler(fn) { this._onError = fn; }
 
     /** 订阅状态变化：listener(key, status, extra) */
@@ -86,12 +89,16 @@ export class BetterTTSPlayer {
         this._drain();
     }
 
-    /** 合成超时保护：某条长时间卡住不会永久阻塞整个播放器 */
+    /** 合成超时保护：超时可配置（默认45s），某条长时间卡住不会永久阻塞播放器 */
     _synthWithTimeout(entry) {
-        const timeoutMs = 45000;
+        let ms = 45000;
+        try {
+            const v = Number(this._synthTimeout && this._synthTimeout());
+            if (Number.isFinite(v) && v > 0) ms = v;
+        } catch { /* ignore */ }
         return Promise.race([
             Promise.resolve().then(() => entry.synth()),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('合成超时（>45s），已跳过本条')), timeoutMs)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('合成超时（>' + Math.round(ms / 1000) + 's），已跳过本条')), ms)),
         ]);
     }
 
