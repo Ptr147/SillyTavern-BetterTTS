@@ -3,7 +3,7 @@
 // 支持：导出/导入全部配置（JSON）、恢复默认、提示词编辑/导入/导出、
 // 音色获取等。
 
-import { LANGUAGES, DEFAULT_PROMPT_TEXT, DEFAULT_FULL_PROMPT_TEXT, EXT_VERSION } from './defaults.js';
+import { LANGUAGES, DEFAULT_PROMPT_TEXT, DEFAULT_FULL_PROMPT_TEXT, DEFAULT_ROLE_PROMPT_TEXT, EXT_VERSION } from './defaults.js';
 import * as settings from './settings.js';
 import { escapeHtml, downloadTextFile, pickTextFile, num, debounce } from './util.js';
 import { PROVIDER_DEFS } from './providers.js';
@@ -210,6 +210,19 @@ export function buildSettingsHtml(opts = {}) {
           <button type="button" class="menu_button btts-btn btts-prompt-copy">复制当前提示词</button>
           <button type="button" class="menu_button btts-btn btts-prompt-export">导出(.txt)</button>
           <button type="button" class="menu_button btts-btn btts-prompt-import">导入(.txt/.json)</button>
+        </div>
+      </fieldset>
+
+      <fieldset class="btts-fs">
+        <legend>角色注册系统提示词（BTTS-AddRole · 独立，默认注入，两种模式都生效）</legend>
+        <label class="btts-check" style="margin-bottom:6px"
+          title="无论说话/全文模式都注入“BTTS-AddRole 注册规则”，用于指导模型给角色/旁白注册声音描述">
+          <input type="checkbox" data-key="prompt.roleInject">默认注入角色注册规则</label>
+        <textarea data-key="prompt.roleText" class="text_pole btts-inp btts-ta-lg" spellcheck="false"
+          placeholder="（内置角色注册规则已自动填入，可在此修改）"></textarea>
+        <div class="btts-inline">
+          <span class="btts-hint">从说话模式提示词中独立出来，切换合成模式不会被替换</span>
+          <button type="button" class="menu_button btts-btn btts-prompt-role-reset">恢复角色规则模板</button>
         </div>
       </fieldset>
 
@@ -427,6 +440,11 @@ export function bindSettings(rootEl, hooks = {}) {
         setByPath('prompt.fullText', DEFAULT_FULL_PROMPT_TEXT);
         refreshAll();
         notify('已填入内置全文模式提示词');
+    });
+    el('.btts-prompt-role-reset')?.addEventListener('click', () => {
+        setByPath('prompt.roleText', DEFAULT_ROLE_PROMPT_TEXT);
+        refreshAll();
+        notify('已填入内置角色注册规则');
     });
     el('.btts-prompt-copy')?.addEventListener('click', async () => {
         const { copyText } = await import('./util.js');

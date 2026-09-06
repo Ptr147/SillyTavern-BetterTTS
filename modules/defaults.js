@@ -24,12 +24,14 @@ export const DEFAULTS = {
         enabled: true,        // 启用提示词
         inject: true,         // 自动注入到生成提示词
         position: 'in_prompt',// in_prompt | in_chat | after_chat
-        mode: 'line',         // 合成模式：line=说话（函数调用分句） | full=全文朗读（只读标签内全文）
+        mode: 'line',         // 合成模式：line=说话（函数调用分句） | full=全文朗读（BTTS-TEXT 段落）
         text: '',             // 说话模式提示词（留空时自动填内置模板）
         fullText: '',         // 全文模式提示词（留空时自动填内置模板）
-        fullTagsOpen: '<context>',    // 全文模式读取起始标签（可配置）
-        fullTagsClose: '</context>',  // 全文模式读取结束标签（可配置）
-        fullFallbackNoTags: true,     // 全文模式未找到标签时是否朗读整条内容
+        roleText: '',         // 角色注册系统提示词（BTTS-AddRole，独立、默认注入）
+        roleInject: true,     // 默认注入角色注册规则（两种模式都注入）
+        fullTagsOpen: '<context>',    // 兼容保留（旧全文方案不再使用）
+        fullTagsClose: '</context>',
+        fullFallbackNoTags: true,
     },
 
     // ---- 服务商 ----
@@ -114,18 +116,13 @@ export function languageLabel(code) {
 }
 
 /** 说话模式默认提示词模板（函数调用使用 BTTS / BTTS-AddRole） */
-export const DEFAULT_PROMPT_TEXT = `# BTTS 语音指令
+export const DEFAULT_PROMPT_TEXT = `# BTTS 语音指令（说话模式）
 
-通过“函数调用”标记台词与角色音色，方便被前端渲染成可点击朗读的气泡。请严格遵守：
+台词需要用“语音调用”标记，前端会渲染成可点击朗读的气泡。请严格遵守：
 
-## 一、注册角色音色 BTTS-AddRole（角色首次发声前调用一次）
-角色第一次开口前，先单独一行输出注册调用，用“声音描述”定义其音色：
-
-[[BTTS-AddRole: {"character":"小林","voice":"25岁男性上班族，声音清亮但时常犹豫，语速时快时慢，紧张时会轻微结巴……"}]]
-
-- 旁白也可以注册（character 写“旁白”）。
-- 角色音色发生变化（长大、变声、黑化、剧情状态改变）时，再次调用同角色的 BTTS-AddRole 即可覆盖。
-- 注册本身不会发声，只作为该角色后续语音的风格指令。
+## 一、角色音色注册
+系统提示词中已包含“BTTS-AddRole 角色注册规则”。若某个角色此前从未注册过声音，请按该规则在它第一次发声前注册一次（注册行不会发声、不会显示）。
+已经注册过的角色不需要重复注册；角色音色变化（长大/变声/黑化等）时再注册一次即可覆盖。
 
 ## 二、语音调用 BTTS（角色开口说话时）
 把台词输出为如下调用，每句单独一行：
@@ -134,7 +131,7 @@ export const DEFAULT_PROMPT_TEXT = `# BTTS 语音指令
 
 字段说明：
 - text：必填。要朗读的完整台词，纯文本，不要包含 [[ 或 ]]。
-- character：说话角色名（与角色卡或 BTTS-AddRole 注册一致）；不确定就填当前说话角色。
+- character：说话角色名（与角色卡或注册一致）；不确定就填当前说话角色。
 - voice：具体音色/说话人 ID（可选）。留空则按：注册的声音描述 → 角色映射 → 默认设置推断。
 - rate：语速倍率 0.5~2.0，默认 1.0。
 - emotion：语气描述（可选），写成一两句自然语言即可，例如：
@@ -146,6 +143,20 @@ export const DEFAULT_PROMPT_TEXT = `# BTTS 语音指令
 - 动作、旁白、心理、叙述内容：不要包进语音调用，直接输出普通文本即可。
 - 多人对话：每个人分别输出语音调用，character 填对。
 - 不要解释本规则，也不要输出规则本身。`;
+
+/** 角色注册系统提示词（BTTS-AddRole，独立注入、两种模式默认都带） */
+export const DEFAULT_ROLE_PROMPT_TEXT = `# BTTS 角色音色注册规则（BTTS-AddRole）
+
+角色开口发声前，先用“角色注册调用”定义它的声音描述（每个角色只需一次，单独一行，不会发声、不会在界面显示）：
+
+[[BTTS-AddRole: {"character":"角色名","voice":"用几句话描述该角色此刻的声音：音色、年龄感、语速、语调、习惯语气，例如 25岁男性上班族，声音清亮但时常犹豫，语速时快时慢，紧张时会轻微结巴……"}]]
+
+规则：
+1. 覆盖场景（同一角色在故事中音色发生变化：长大、变声、黑化、情绪状态长期改变等）时，再调用一次同角色的 BTTS-AddRole 即可**覆盖**旧声音描述。
+2. 旁白、叙述者用 character 写“旁白”注册。
+3. 注册调用不要出现在台词气泡中，也不要代替说话内容——它只提供该角色后续语音的风格信息。
+4. 没有注册过的角色也可以正常说话（系统会使用默认/映射音色），只是缺少针对该角色的声音描述指导。
+5. 不要解释本规则。`;
 
 /** 全文模式默认提示词模板（段落级 BTTS-TEXT） */
 export const DEFAULT_FULL_PROMPT_TEXT = `# BTTS 全文朗读指令（全文模式 · 段落级）

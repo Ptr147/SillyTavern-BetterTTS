@@ -881,19 +881,52 @@ function pushInjectStatus(msg, ok) {
     }
 }
 
-/** 单次注册（失败不打断，返回结果） */
+function injectStatusText(res) {
+    if (!res || !res.ok) return null;
+    let t = '已注入：' + (res.label || modeLabel());
+    if (res.roleOk === true) t += ' + 角色规则';
+    else if (res.roleOk === false) t += '（角色规则未注入）';
+    return t;
+}
+
+const ROLE_PROMPT_NAME = EXT_NAME + '-角色注册'; // 独立的 BTTS-AddRole 系统提示词条目
+
+/** 单次注册（失败不打断，返回结果）
+ *  注入两条：① 当前合成模式提示词（说话/全文）② 角色注册规则（默认都注入） */
 async function tryInjectPrompt() {
     const s = settings.get();
-    if (!promptApi.promptEnabled(s) || !promptApi.promptShouldInject(s)) return { ok: false, error: '未启用' };
-    return await promptApi.registerInjection(s, { getName: () => EXT_NAME, getContext: ctx });
+    const primaryEnabled = promptApi.promptEnabled(s) && promptApi.promptShouldInject(s);
+    const roleEnabled = primaryEnabled && promptApi.rolePromptInject(s);
+
+    const primary = await promptApi.registerNamedInjection(s, {
+        name: EXT_NAME,
+        text: promptApi.promptTextOf(s),
+        enabled: primaryEnabled,
+        getContext: ctx,
+    });
+    const role = await promptApi.registerNamedInjection(s, {
+        name: ROLE_PROMPT_NAME,
+        text: promptApi.rolePromptTextOf(s),
+        enabled: roleEnabled,
+        getContext: ctx,
+    });
+    return {
+        ok: primary.ok,
+        method: primary.method || role.method,
+        error: primary.error,
+        entry: primary.entry,
+        roleOk: role.ok,
+        roleError: role.error,
+        label: modeLabel(),
+    };
 }
 
 async function refreshPromptInjection() {
     const res = await tryInjectPrompt();
     injectionState = { ok: res.ok, method: res.method, error: res.error, attempted: true, warned: injectionState.warned };
     if (res.ok) {
-        dlog('提示词注入成功', res.entry);
-        pushInjectStatus('已注入（' + modeLabel() + '）', true);
+        dlog('提示词注入成功', res.entry, '角色规则:', res.roleOk === true ? '已注入' : (res.roleError || '未启用'));
+        pushInjectStatus(injectStatusText(res), true);
         return true;
     }
     // 失败 → 自动重试（ST 上下文可能尚未就绪）
@@ -907,8 +940,8 @@ async function refreshPromptInjection() {
             clearInterval(timer);
             injectionState.ok = true;
             injectionState.error = null;
-            dlog('提示词注入成功（重试）', r2.entry);
-            pushInjectStatus('已注入（' + modeLabel() + '）', true);
+            dlog('提示词注入成功（重试）', r2.entry, '角色规则:', r2.roleOk === true ? '已注入' : (r2.roleError || '未启用'));
+            pushInjectStatus(injectStatusText(r2), true);
             return;
         }
         if (tries >= 6) {

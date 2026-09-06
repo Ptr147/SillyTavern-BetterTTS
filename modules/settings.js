@@ -1,6 +1,6 @@
 // BetterTTS - 配置数据管理（读写 extension_settings.betterTTS）
 
-import { DEFAULTS, SETTINGS_KEY, NARRATOR_KEY, DEFAULT_PROMPT_TEXT, DEFAULT_FULL_PROMPT_TEXT } from './defaults.js';
+import { DEFAULTS, SETTINGS_KEY, NARRATOR_KEY, DEFAULT_PROMPT_TEXT, DEFAULT_FULL_PROMPT_TEXT, DEFAULT_ROLE_PROMPT_TEXT } from './defaults.js';
 import { prettyJson, safeParse } from './util.js';
 
 let extensionSettings = null; // ST 的 extension_settings 对象
@@ -51,6 +51,7 @@ export function hydrate() {
     if (!merged.prompt || typeof merged.prompt !== 'object') merged.prompt = structuredClone(DEFAULTS.prompt);
     if (!String(merged.prompt.text || '').trim()) merged.prompt.text = DEFAULT_PROMPT_TEXT;
     if (!String(merged.prompt.fullText || '').trim()) merged.prompt.fullText = DEFAULT_FULL_PROMPT_TEXT;
+    if (!String(merged.prompt.roleText || '').trim()) merged.prompt.roleText = DEFAULT_ROLE_PROMPT_TEXT;
     if (!merged.prompt.mode) merged.prompt.mode = 'line';
     extensionSettings[SETTINGS_KEY] = merged;
     data = merged;
