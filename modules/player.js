@@ -20,6 +20,7 @@ export class BetterTTSPlayer {
         this.queue = [];        // 尚未开始的 entries
         this.current = null;    // 正在加载/播放的 entry
         this._draining = false;
+        this._drainAgain = false;
         this._listeners = new Set();
         this._volume = () => 1;
         this._onError = null;
@@ -76,38 +77,58 @@ export class BetterTTSPlayer {
         }
         this.queue.push(entry);
         this._emitEntry(entry, PlayerStatus.QUEUED);
+        this._kick();
+    }
+
+    /** 唤起排空循环；正在排空时标记“需要再来一轮” */
+    _kick() {
+        if (this._draining) { this._drainAgain = true; return; }
         this._drain();
     }
 
-    /** 内部：串行消费队列 */
+    /** 合成超时保护：某条长时间卡住不会永久阻塞整个播放器 */
+    _synthWithTimeout(entry) {
+        const timeoutMs = 45000;
+        return Promise.race([
+            Promise.resolve().then(() => entry.synth()),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('合成超时（>45s），已跳过本条')), timeoutMs)),
+        ]);
+    }
+
+    /** 内部：串行消费队列（可被 _kick 再次唤醒，永不因并发点击卡死） */
     async _drain() {
-        if (this._draining) return;
+        if (this._draining) { this._drainAgain = true; return; }
         this._draining = true;
+        this._drainAgain = false;
         try {
-            while (!this.current && this.queue.length) {
-                const entry = this.queue.shift();
-                this.current = entry;
-                entry.ready = false;
-                this._emitEntry(entry, PlayerStatus.LOADING);
-                try {
-                    const blobs = await entry.synth();
-                    if (!Array.isArray(blobs) || !blobs.length) throw new Error('没有返回音频数据');
-                    if (this.current !== entry) return; // 播放期间被停止
-                    entry.blobs = blobs;
-                    entry.ready = true;
-                    await this._playEntryBlobs(entry);
-                } catch (e) {
-                    if (this.current !== entry) return;
-                    this.current = null;
-                    const msg = e?.message || String(e);
-                    this._emitEntry(entry, PlayerStatus.ERROR, { message: msg });
-                    if (this._onError) { try { this._onError(entry, msg); } catch { /* ignore */ } }
+            do {
+                while (!this.current && this.queue.length) {
+                    const entry = this.queue.shift();
+                    this.current = entry;
+                    entry.ready = false;
+                    this._emitEntry(entry, PlayerStatus.LOADING);
+                    try {
+                        const blobs = await this._synthWithTimeout(entry);
+                        if (this.current !== entry) break; // 已被新任务顶替/停止
+                        if (!Array.isArray(blobs) || !blobs.length) throw new Error('没有返回音频数据');
+                        entry.blobs = blobs;
+                        entry.ready = true;
+                        await this._playEntryBlobs(entry);
+                    } catch (e) {
+                        if (this.current !== entry) break; // 已被顶替，不再报错
+                        this.current = null;
+                        const msg = e?.message || String(e);
+                        this._emitEntry(entry, PlayerStatus.ERROR, { message: msg });
+                        if (this._onError) { try { this._onError(entry, msg); } catch { /* ignore */ } }
+                    }
                 }
-            }
+            } while (this._drainAgain && !this.current);
         } finally {
             this._draining = false;
-            // 若期间又有新条目进来（竞争窗口），再触发一轮
-            if (this.queue.length && !this.current) this._drain();
+            if (this._drainAgain && !this.current) {
+                this._drainAgain = false;
+                this._drain();
+            }
         }
     }
 
@@ -143,9 +164,11 @@ export class BetterTTSPlayer {
             const done = (ok) => {
                 if (settled) return;
                 settled = true;
+                entry._playDone = null;   // 先摘除，防止 _cleanupAudio 二次结算
                 this._cleanupAudio(entry);
                 resolve(ok);
             };
+            entry._playDone = done;       // 供 _stopCurrent/_cleanupAudio 主动结束（否则会卡死排空循环）
 
             audio.onended = () => done(true);
             audio.onerror = () => {
@@ -201,6 +224,10 @@ export class BetterTTSPlayer {
         if (entry.objectUrl) { try { URL.revokeObjectURL(entry.objectUrl); } catch { /* ignore */ } }
         entry.audio = null;
         entry.objectUrl = null;
+        // 主动结算仍挂起的播放 Promise（播放中被停止时，否则排空循环会永久卡住）
+        const pending = entry._playDone;
+        entry._playDone = null;
+        if (pending) { try { pending(false); } catch { /* ignore */ } }
     }
 
     /** 停止当前（不含队列） */
@@ -222,7 +249,7 @@ export class BetterTTSPlayer {
 
     /** 从队列中移除某 key（正在播放则停止） */
     remove(key) {
-        if (this.current?.key === key) { this._stopCurrent(); this._drain(); return; }
+        if (this.current?.key === key) { this._stopCurrent(); this._kick(); return; }
         const idx = this.queue.findIndex(e => e.key === key);
         if (idx >= 0) {
             const [removed] = this.queue.splice(idx, 1);
