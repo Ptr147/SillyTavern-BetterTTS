@@ -223,14 +223,20 @@ export function buildSettingsHtml(opts = {}) {
   </div>`;
 
     if (opts.panel) {
-        // 扩展面板内：整块收进折叠区（默认收起，点标题展开），避免挤占其它扩展
-        return `<details class="btts-collapse">
-  <summary class="btts-summary">
-    <span class="btts-summary-title">🔊 BetterTTS 设置</span>
-    <span class="btts-summary-sub">点击展开 / 收起 · 开关、服务商、提示词、角色映射、导入导出</span>
-  </summary>
-  <div class="btts-collapse-body">${inner}</div>
-</details>`;
+        // 扩展面板内：使用 SillyTavern 主题自带的 inline-drawer 折叠结构
+        // （参考 builtin 扩展的 extension_container / inline-drawer 写法）
+        return `<div class="extension_container btts-native-ext">
+  <div class="inline-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header interactable btts-native-toggle">
+      <div class="flex-container alignitemscenter margin0">
+        <b>🔊 BetterTTS 设置</b>
+        <small class="marginLeft5" style="opacity:.65">v${EXT_VERSION} · 点击标题折叠/展开</small>
+      </div>
+      <div class="inline-drawer-icon fa-solid interactable up fa-circle-chevron-up btts-native-arrow" tabindex="0" role="button"></div>
+    </div>
+    <div class="inline-drawer-content btts-native-content" style="display: block;">${inner}</div>
+  </div>
+</div>`;
     }
     return inner;
 }
@@ -324,6 +330,22 @@ export function bindSettings(rootEl, hooks = {}) {
 
     // ---- 事件绑定 ----
     const saveDebounced = debounce(() => settings.persist(), 300);
+
+    // 原生 inline-drawer 折叠：自行处理点击，避免与 ST 全局委托重复触发
+    (() => {
+        const content = $root.querySelector('.btts-native-content');
+        const arrow = $root.querySelector('.btts-native-arrow');
+        const header = $root.querySelector('.btts-native-toggle');
+        if (!content) return;
+        const flip = (e) => {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            const shown = content.style.display !== 'none';
+            content.style.display = shown ? 'none' : 'block';
+            if (arrow) arrow.classList.toggle('up', !shown);
+        };
+        header?.addEventListener('click', flip);
+        arrow?.addEventListener('click', flip);
+    })();
 
     $root.addEventListener('input', (e) => {
         const t = e.target;

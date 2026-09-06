@@ -475,6 +475,19 @@ function hideChipMenu() {
 // ---------------------------------------------------------------------------
 // 底部选项栏按钮
 // ---------------------------------------------------------------------------
+/** 打开 BetterTTS-角色 弹窗（供选项菜单 / 底部按钮共用） */
+function openRolesPopup() {
+    charpopup.openCharacterPopup({
+        getContext: ctx,
+        onSample: (p) => {
+            const call = { text: p.text || '试听', character: p.name, voice: p.voice || '', language: p.language || '', rate: null, emotion: '', volume: null };
+            const e = entryForCall(call, 'sample:' + nowClock(), p.name);
+            player.enqueue(e, { startNow: true });
+        },
+        onMappingChanged: () => { /* settings 已持久化 */ },
+    });
+}
+
 function buildBottomBar() {
     const group = document.createElement('div');
     group.className = 'btts-bar';
@@ -484,17 +497,7 @@ function buildBottomBar() {
     btnChar.className = 'menu_button btts-bar-btn';
     btnChar.innerHTML = '🔊 <span>BetterTTS-角色</span>';
     btnChar.title = '为不同角色指定说话人（音色）与语言';
-    btnChar.addEventListener('click', () => {
-        charpopup.openCharacterPopup({
-            getContext: ctx,
-            onSample: (p) => {
-                const call = { text: p.text || '试听', character: p.name, voice: p.voice || '', language: p.language || '', rate: null, emotion: '', volume: null };
-                const e = entryForCall(call, 'sample:' + nowClock(), p.name);
-                player.enqueue(e, { startNow: true });
-            },
-            onMappingChanged: () => { /* settings 已持久化 */ },
-        });
-    });
+    btnChar.addEventListener('click', openRolesPopup);
 
     const btnSet = document.createElement('button');
     btnSet.type = 'button';
@@ -509,50 +512,87 @@ function buildBottomBar() {
     return group;
 }
 
-let bttsBarEl = null;       // 底部栏按钮组（幂等）
+let bttsBarEl = null;            // 旧式底部独立按钮组（仅在无法接入选项菜单时兜底）
 let barMounted = false;
+let optionMenuMounted = false;   // 是否已把入口加入 发送栏“…”弹出菜单
+
+/** 生成与 ST 原生选项项一致的 <a> 入口（参考 #option_close_chat） */
+function makeOptionLink(id, iconClass, text, title, onClick) {
+    const a = document.createElement('a');
+    a.id = id;
+    a.className = 'interactable';
+    a.tabIndex = 0;
+    a.setAttribute('role', 'button');
+    a.title = title || text;
+    a.style.cssText = 'cursor:pointer;display:flex;align-items:center;gap:6px;';
+    const i = document.createElement('i');
+    i.className = iconClass;
+    i.style.width = '18px';
+    i.style.textAlign = 'center';
+    const span = document.createElement('span');
+    span.textContent = text;
+    a.appendChild(i);
+    a.appendChild(span);
+    const fire = (ev) => {
+        if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+        onClick();
+    };
+    a.addEventListener('click', fire);
+    a.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); onClick(); }
+    });
+    return a;
+}
 
 /**
- * 把“BetterTTS-角色 / ⚙”按钮放进聊天底部选项栏。
- * 采用候选锚点 + 幂等 + 可重试策略：某些 ST 版本聊天区较晚渲染。
- * @returns {boolean} 是否成功挂载
+ * 把“BetterTTS-角色 / 设置”入口并入 发送栏“…”弹出菜单，
+ * 插入到 #option_close_chat 同列表内（同样式、同容器）。
+ * @returns {boolean} 是否成功（容器尚未渲染时返回 false 以便重试）
  */
-function mountBottomBar() {
+function mountOptionMenuEntries() {
+    // 已插入且仍在 DOM 中 → 完成；若被 ST 重新渲染清掉则再次插入
+    if (document.getElementById('btts-menu-characters')) { optionMenuMounted = true; return true; }
+    const closeChat = document.querySelector('#option_close_chat');
+    if (!closeChat || !closeChat.parentNode) return false;
+    const parent = closeChat.parentNode;
+
+    const setLink = makeOptionLink(
+        'btts-menu-settings', 'fa-solid fa-cog', 'BetterTTS 设置',
+        '打开 BetterTTS 设置（开关/服务商/提示词/角色映射）', openSettingsModal);
+    const charLink = makeOptionLink(
+        'btts-menu-characters', 'fa-solid fa-microphone-lines', 'BetterTTS-角色',
+        '为不同角色指定说话人（音色）与语言', openRolesPopup);
+
+    parent.insertBefore(setLink, closeChat);
+    parent.insertBefore(charLink, setLink);
+    optionMenuMounted = true;
+    dlog('BetterTTS 入口已并入 发送栏“…”菜单（#option_close_chat 列表）');
+    return true;
+}
+
+/**
+ * 兜底方案：聊天底部输入栏独立按钮（仅当选项菜单容器不可用时启用，
+ * 保证入口不丢失）。样式尽量内敛，避免挤压输入栏。
+ */
+function mountLegacyBar() {
     if (barMounted && bttsBarEl && bttsBarEl.isConnected) return true;
     if (!bttsBarEl) bttsBarEl = buildBottomBar();
 
     const g = bttsBarEl;
-    const q = (sel) => document.querySelector(sel);
-
-    // 候选锚点（按优先级）：
-    // 1) send 按钮前；2) ST 的 send 工具按钮组；3) options 按钮后；4) 输入栏容器
-    const sendBtn = q('#send_but_send');
+    const sendBtn = document.querySelector('#send_but_send');
     if (sendBtn) {
         sendBtn.parentNode?.insertBefore(g, sendBtn);
-        dlog('底部按钮已挂载到 #send_but_send 前');
-        barMounted = true;
-        return true;
-    }
-    const optionsBtn = q('#options_button');
-    if (optionsBtn && optionsBtn.parentNode) {
-        optionsBtn.parentNode.insertBefore(g, optionsBtn.nextSibling);
-        dlog('底部按钮已挂载到 #options_button 后');
-        barMounted = true;
-        return true;
-    }
-    const sendForm = q('#send_form');
-    if (sendForm) {
-        // 放进输入栏（尽量保持可见；若 flex 布局，前置为新一行）
-        sendForm.appendChild(g);
-        dlog('底部按钮已挂载到 #send_form 内（候选锚点未命中，使用兜底位置）');
-        barMounted = true;
-        return true;
-    }
-    // 极端兜底：右下角悬浮
-    if (!g.isConnected) {
-        document.body.appendChild(g);
-        g.classList.add('btts-bar-fallback');
-        dlog('未找到输入栏容器，底部按钮以悬浮形式显示');
+        dlog('兜底：底部按钮已挂载到 #send_but_send 前');
+    } else {
+        const sendForm = document.querySelector('#send_form');
+        if (sendForm) {
+            sendForm.appendChild(g);
+            dlog('兜底：底部按钮已挂载到 #send_form 内');
+        } else if (!g.isConnected) {
+            document.body.appendChild(g);
+            g.classList.add('btts-bar-fallback');
+            dlog('兜底：底部按钮以悬浮形式显示');
+        }
     }
     barMounted = true;
     return true;
@@ -585,11 +625,11 @@ function mountIntoSettingsPanel() {
     }
 }
 
-/** 统一尝试挂载（设置面板 + 底部栏），供定时重试用 */
+/** 统一尝试挂载（设置面板 + 选项菜单入口），供定时重试用 */
 function ensureMounts() {
-    let ok = mountIntoSettingsPanel();
-    const bar = mountBottomBar();
-    return ok && bar;
+    const panel = mountIntoSettingsPanel();
+    const menu = mountOptionMenuEntries();
+    return panel && menu;
 }
 
 let modalEl = null;
@@ -783,7 +823,8 @@ async function init() {
         'enabled=' + settings.isEnabled(),
         'provider=' + settings.get().provider,
         '设置面板已挂载=' + settingsPanelMounted,
-        '底部按钮已挂载=' + barMounted);
+        '选项菜单入口=' + optionMenuMounted,
+        '兜底按钮=' + barMounted);
 }
 
 // ST 的扩展由动态 import 加载；防止意外重复执行（如热更新/重复挂载）
@@ -791,14 +832,18 @@ function boot() {
     if (globalThis.__BETTER_TTS_BOOTED__) return;
     globalThis.__BETTER_TTS_BOOTED__ = true;
     const run = () => init().then(() => {
-        // 兜底重试挂载：面板/聊天区可能晚于扩展脚本出现（最长约 20s）
+        // 兜底重试挂载：面板/选项菜单可能晚于扩展脚本出现（最长约 20s）
         let tries = 0;
         const timer = setInterval(() => {
             tries++;
             const done = ensureMounts();
             if (done || tries >= 20) {
                 clearInterval(timer);
-                dlog('挂载重试结束：设置面板=' + settingsPanelMounted + ' 底部按钮=' + barMounted);
+                // 一直找不到选项菜单容器时才退回旧式独立按钮，保证入口不丢
+                if (!optionMenuMounted && !barMounted) {
+                    try { mountLegacyBar(); } catch { /* ignore */ }
+                }
+                dlog('挂载重试结束：设置面板=' + settingsPanelMounted + ' 选项菜单入口=' + optionMenuMounted + ' 兜底按钮=' + barMounted);
             }
         }, 1000);
     }).catch(e => {
@@ -811,4 +856,4 @@ function boot() {
     }
 }
 boot();
-dlog('模块已加载（BetterTTS v' + EXT_VERSION + '），若你在界面看不到任何 BetterTTS 入口，请检查：1) 目录是否为 public/scripts/extensions/<名字>/；2) 是否重启了 SillyTavern 服务端（不是仅刷新页面）；3) 浏览器控制台是否有上面的红色错误。');
+dlog('模块已加载（BetterTTS v' + EXT_VERSION + '），入口位于：发送栏“…”弹出菜单（BetterTTS-角色 / BetterTTS 设置）+ 扩展面板“🔊 BetterTTS 设置”。若看不到，请检查：1) 目录是否为 public/scripts/extensions/third-party/<名字>/；2) 是否重启了 SillyTavern 服务端；3) 浏览器控制台是否有红色错误。');
