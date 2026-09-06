@@ -441,6 +441,9 @@ async function autoHandleMessage(mes, { allowCalls, allowNarr, streamingNow }) {
     // 角色注册始终吸收（说话/全文模式都需要声音描述）
     ingestRolesFromText(mes.mes);
 
+    // “自动播放”总开关：关闭时只保留手动点气泡朗读
+    if (s.autoPlay === false) return;
+
     // 全文模式：按“段落调用 BTTS-TEXT”逐段朗读（流式时每完成一段即播一段）
     if (s.prompt?.mode === 'full') {
         if (!(allowCalls || allowNarr)) return;
@@ -511,7 +514,8 @@ function onGenerationStart() {
     handledNarr.clear();
     handledText.clear();
     rearmInjectionBeforeGeneration();
-    if (settings.get().streaming) schedulePoll();
+    const s = settings.get();
+    if (s.streaming && s.autoPlay !== false) schedulePoll();
 }
 
 async function onGenerationEnd() {

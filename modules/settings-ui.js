@@ -125,6 +125,7 @@ export function buildSettingsHtml(opts = {}) {
       <legend>基本设置</legend>
       <div class="btts-inline">
         <label class="btts-check"><input type="checkbox" data-key="enabled">启用 BetterTTS</label>
+        <label class="btts-check" title="新消息生成完成后自动朗读；关闭后只在你点击气泡时才朗读"><input type="checkbox" data-key="autoPlay">自动播放</label>
         <label class="btts-check" title="生成过程中边出边读（逐条）；关闭则等整条消息生成完成后朗读"><input type="checkbox" data-key="streaming">流式播放</label>
         <label class="btts-check" title="多个语音调用/句子逐段独立合成朗读；关闭则同音色内容合并为整段朗读"><input type="checkbox" data-key="perSegment">按段朗读</label>
         <label class="btts-check" title="朗读角色消息中没有语音调用的纯叙述/旁白文本（使用“旁白/默认”音色）"><input type="checkbox" data-key="readNarration">朗读旁白</label>

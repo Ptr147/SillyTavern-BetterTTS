@@ -12,6 +12,7 @@ export const DEFAULTS = {
 
     // ---- 基本 ----
     enabled: true,            // 总开关
+    autoPlay: true,           // 自动播放：新消息生成完成后自动朗读（关闭后仅手动点气泡）
     streaming: false,         // 流式播放：生成过程中边出边读（关闭则整条消息生成完再读）
     perSegment: true,         // 按段朗读：每个语音调用/句子独立合成播放
     readNarration: false,     // 朗读旁白：没有语音调用的纯叙述文本也要朗读
