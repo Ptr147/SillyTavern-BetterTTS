@@ -869,7 +869,7 @@ function refreshAllSettingsUi() {
 // ---------------------------------------------------------------------------
 // 提示词注入
 // ---------------------------------------------------------------------------
-let injectionState = { ok: false, method: null, attempted: false, warned: false };
+let injectionState = { ok: false, method: null, attempted: false, warned: false, roleOk: null };
 
 function modeLabel() {
     return settings.get().prompt?.mode === 'full' ? '全文模式' : '说话模式';
@@ -965,6 +965,40 @@ function rearmInjectionBeforeGeneration() {
     tryInjectPrompt().then(r => {
         if (r.ok) logDebug('生成前提示词复注册成功');
     }).catch(() => { });
+}
+
+/** 静默补注册：只在状态变化时更新界面，不打扰 */
+async function silentInject() {
+    try {
+        const res = await tryInjectPrompt();
+        const stateChanged = injectionState.ok !== res.ok
+            || (res.ok && injectionState.roleOk !== res.roleOk);
+        if (!stateChanged) return;
+        injectionState.ok = res.ok;
+        injectionState.roleOk = res.roleOk === true;
+        injectionState.error = res.ok ? null : (res.error || '');
+        if (res.ok) {
+            dlog('注入守护：已注入（' + (res.label || modeLabel()) + '） 角色规则=' + (res.roleOk === true ? '已注入' : '未注入'));
+            pushInjectStatus(injectStatusText(res), true);
+        } else {
+            dlog('注入守护：仍未成功（' + (res.error || '') + '）');
+            if (!injectionState.warned && injectionState.attempted) {
+                injectionState.warned = true;
+                derr('提示词自动注入失败：', res.error || '', promptApi.injectionNotice());
+                notify('提示词自动注入失败：' + (res.error || '未知原因') + '（详见控制台）', 'error');
+            }
+        }
+    } catch (e) { logDebug('注入守护异常', e); }
+}
+
+/**
+ * 启动“注入守护”：ST 启动后可能晚些重置提示词表，
+ * 这里错峰多次 + 周期补注册，确保不操作选项、直接聊天也能注入。
+ */
+function startInjectionKeeper() {
+    const delays = [800, 2500, 6000, 15000, 30000];
+    for (const ms of delays) setTimeout(() => silentInject(), ms);
+    setInterval(() => silentInject(), 15000);
 }
 
 // ---------------------------------------------------------------------------
@@ -1075,6 +1109,7 @@ async function init() {
 
     // 提示词注入 & 命令
     refreshPromptInjection();
+    startInjectionKeeper();
     registerSlashCommands();
 
     dlog('初始化完成：',
