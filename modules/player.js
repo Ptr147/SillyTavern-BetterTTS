@@ -102,39 +102,38 @@ export class BetterTTSPlayer {
         ]);
     }
 
-    /** 内部：串行消费队列（可被 _kick 再次唤醒，永不因并发点击卡死） */
+    /** 内部：串行消费队列（单遍消费，结束后若有新任务/新唤醒再排空，杜绝空转死循环） */
     async _drain() {
         if (this._draining) { this._drainAgain = true; return; }
         this._draining = true;
         this._drainAgain = false;
         try {
-            do {
-                while (!this.current && this.queue.length) {
-                    const entry = this.queue.shift();
-                    this.current = entry;
-                    entry.ready = false;
-                    this._emitEntry(entry, PlayerStatus.LOADING);
-                    try {
-                        const blobs = await this._synthWithTimeout(entry);
-                        if (this.current !== entry) break; // 已被新任务顶替/停止
-                        if (!Array.isArray(blobs) || !blobs.length) throw new Error('没有返回音频数据');
-                        entry.blobs = blobs;
-                        entry.ready = true;
-                        await this._playEntryBlobs(entry);
-                    } catch (e) {
-                        if (this.current !== entry) break; // 已被顶替，不再报错
-                        this.current = null;
-                        const msg = e?.message || String(e);
-                        this._emitEntry(entry, PlayerStatus.ERROR, { message: msg });
-                        if (this._onError) { try { this._onError(entry, msg); } catch { /* ignore */ } }
-                    }
+            while (!this.current && this.queue.length) {
+                const entry = this.queue.shift();
+                this.current = entry;
+                entry.ready = false;
+                this._emitEntry(entry, PlayerStatus.LOADING);
+                try {
+                    const blobs = await this._synthWithTimeout(entry);
+                    if (this.current !== entry) break; // 已被新任务顶替/停止
+                    if (!Array.isArray(blobs) || !blobs.length) throw new Error('没有返回音频数据');
+                    entry.blobs = blobs;
+                    entry.ready = true;
+                    await this._playEntryBlobs(entry);
+                } catch (e) {
+                    if (this.current !== entry) break; // 已被顶替，不再报错
+                    this.current = null;
+                    const msg = e?.message || String(e);
+                    this._emitEntry(entry, PlayerStatus.ERROR, { message: msg });
+                    if (this._onError) { try { this._onError(entry, msg); } catch { /* ignore */ } }
                 }
-            } while (this._drainAgain && !this.current);
+            }
         } finally {
             this._draining = false;
-            if (this._drainAgain && !this.current) {
+            // 排空期间又有新任务/唤醒：仅在确实还有可播放内容时再排一轮
+            if ((this._drainAgain || this.queue.length) && !this.current) {
                 this._drainAgain = false;
-                this._drain();
+                if (this.queue.length) this._drain();
             }
         }
     }
