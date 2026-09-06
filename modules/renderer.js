@@ -141,24 +141,9 @@ function textChipHtml({ key, payload, text }) {
         + `</span>`;
 }
 
-/** 把段落文本切成“几句一小段”：每段约 2~4 句或 ~120 字（尊重原分段），每段一个外框 */
+/** 全文段块：每个 BTTS-TEXT 调用渲染为“一个整体边框块”，正文完全按原文（不拆句/不改造） */
 function chunkForChips(text) {
-    const sents = splitSentences(text);
-    if (!sents.length) return [text];
-    const chunks = [];
-    let cur = '';
-    let count = 0;
-    for (const s of sents) {
-        cur = cur ? cur + s : s;
-        count++;
-        if (count >= 3 || cur.length >= 120) {
-            chunks.push(cur);
-            cur = '';
-            count = 0;
-        }
-    }
-    if (cur) chunks.push(cur);
-    return chunks;
+    return [text];
 }
 
 /**

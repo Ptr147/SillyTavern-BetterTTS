@@ -97,7 +97,7 @@
 .mes .btts-seg.btts-text-seg .btts-quote { display: none; }
 .mes .btts-seg.btts-text-seg .btts-seg-text {
     display: block;
-    white-space: pre-wrap;
+    white-space: normal;          /* 与正文排版一致，不额外保留/折叠换行 */
     overflow-wrap: anywhere;
 }
 .mes .btts-seg.btts-text-seg:hover {
