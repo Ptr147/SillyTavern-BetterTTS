@@ -277,8 +277,41 @@ async function openaiSynthesize(request, cfg) {
         try { detail = (await res.text()).slice(0, 300); } catch { /* ignore */ }
         throw new Error('HTTP ' + res.status + ' ' + detail);
     }
-    const blob = await res.blob();
-    const mime = blob.type || (cfg.responseFormat === 'wav' || cfg.responseFormat === 'pcm' ? 'audio/wav' : 'audio/mpeg');
+    let blob = await res.blob();
+    let mime = blob.type || (cfg.responseFormat === 'wav' || cfg.responseFormat === 'pcm' ? 'audio/wav' : 'audio/mpeg');
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const looksLikeAudio = mime.startsWith('audio/');
+
+    // 一些自建“OpenAI 兼容”服务把音频包在 JSON 里返回：{url} / {audio_url} / {base64|data} …
+    if (!looksLikeAudio && (ct.includes('json') || ct.includes('text'))) {
+        try {
+            const text = await blob.text();
+            const data = JSON.parse(text);
+            const url = data.url || data.audio_url || data.audioUrl || data.audio || data.data?.url || data.data?.audioUrl;
+            if (typeof url === 'string' && url.length > 0) {
+                const r2 = await fetch(url);
+                if (!r2.ok) throw new Error('拉取音频失败：HTTP ' + r2.status);
+                blob = await r2.blob();
+                mime = blob.type || 'audio/mpeg';
+            } else {
+                // base64 字段
+                const b64 = data.base64 || data.audio_base64 || data.audioBase64
+                    || (typeof data.data === 'string' ? data.data : null)
+                    || (Array.isArray(data.data) ? data.data.join('') : null);
+                if (typeof b64 === 'string' && b64.length) {
+                    const clean = b64.replace(/^data:[^;]+;base64,/, '');
+                    const bin = atob(clean);
+                    const bytes = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    blob = new Blob([bytes], { type: 'audio/mpeg' });
+                    mime = 'audio/mpeg';
+                }
+            }
+        } catch (e) {
+            logDebug('OpenAI 兼容响应不是可解析的 JSON 包装，按原始字节处理：', e?.message || e);
+        }
+    }
+    logDebug('OpenAI 兼容返回 content-type=' + ct + ' -> mime=' + mime + ' size=' + blob.size);
     return [{ blob, mime }];
 }
 
