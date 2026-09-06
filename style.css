@@ -15,6 +15,9 @@
     --btts-card-bg: color-mix(in srgb, var(--SmartThemeQuoteColor, #f0f0f0) 42%, transparent);
     --btts-card-bg-hover: color-mix(in srgb, var(--SmartThemeQuoteColor, #f0f0f0) 68%, transparent);
     --btts-muted: color-mix(in srgb, var(--SmartThemeBodyColor, #3b3b3b) 55%, transparent);
+    /* 说话者 / 引号使用独立颜色（与正文、主题主色分开；可用自定义 CSS 覆盖） */
+    --btts-speaker-color: var(--SmartThemeSpeakerColor, #e07b39);
+    --btts-quote-color: var(--SmartThemeQuoteMarkColor, #0f9d93);
 }
 
 /* ============================================================================
@@ -45,22 +48,20 @@
 .mes .btts-seg:active { opacity: 0.8; }
 .mes .btts-seg:focus-visible { outline: 2px solid var(--btts-main, #3b7dd8); outline-offset: 1px; }
 
-/* 左侧说话者 */
+/* 左侧说话者：与台词内容等大，使用独立颜色 */
 .mes .btts-seg-speaker {
-    margin-right: 3px;
+    margin-right: 4px;
     font-weight: 700;
-    font-size: 0.78em;
-    color: var(--btts-main);
-    opacity: 0.9;
+    font-size: 1em;             /* 与内容一样大 */
+    color: var(--btts-speaker-color);
 }
 
-/* 稍微加大的引号 “ ” */
+/* 稍微加大的引号 “ ”：使用独立颜色 */
 .mes .btts-quote {
-    font-size: 1.25em;
-    line-height: 0;
+    font-size: 1.2em;
+    line-height: 1;
     font-weight: 700;
-    color: var(--btts-main);
-    opacity: 0.75;
+    color: var(--btts-quote-color);
     -webkit-user-select: none;
     user-select: none;
 }
