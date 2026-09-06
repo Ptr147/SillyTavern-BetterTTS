@@ -34,12 +34,15 @@
 
 ## 📦 安装
 
-1. 进入 SillyTavern 安装目录：`SillyTavern/public/scripts/extensions/`
-2. 把本仓库**整个目录**复制为 `public/scripts/extensions/better-tts/`
-   （目录内应直接包含 `index.js`、`style.css`、`manifest.json`、`modules/`）。
-3. 重启/刷新 SillyTavern，扩展自动加载。
+1. 找到 SillyTavern 的扩展目录 `SillyTavern/public/scripts/extensions/`。
+   - **新版（≥1.12，推荐）**：第三方扩展放在其 `third-party/` 子目录，
+     即最终路径为 `public/scripts/extensions/third-party/better-tts/index.js`；
+   - 旧版/直接拷贝：`public/scripts/extensions/better-tts/index.js` 亦可（扩展会自动探测两种深度）。
+2. 把本仓库**整个目录**复制为 `better-tts/`（目录内应直接包含 `index.js`、`style.css`、`manifest.json`、`modules/`）。
+3. **重启 SillyTavern 服务端**（不是仅刷新页面；新增扩展需要服务端重启后才会被加载/激活）。
+4. 打开浏览器控制台（F12）应能看到 `[BetterTTS] 模块已加载` 日志；扩展面板出现 BetterTTS 配置、聊天底部输入栏出现 `🔊 BetterTTS-角色` 与 `⚙` 按钮即安装成功。
 
-> 要求 **SillyTavern ≥ 1.12**。安装后在顶部菜单 **Extensions（扩展）** 面板中能看到本扩展的设置项。
+> 要求 **SillyTavern ≥ 1.12**。若安装后无任何入口，请按控制台 `[BetterTTS]` 日志排查（见“常见问题”）。
 
 ---
 
@@ -171,6 +174,10 @@ request = `{ text, voice, language, rate, emotion, character }`。
 
 ## ❓ 常见问题
 
+- **完全没有任何 BetterTTS 入口（扩展面板/底部栏都没有）**：先在浏览器控制台看有没有 `[BetterTTS]` 日志。
+  没有 → 扩展根本没被加载：确认目录是 `public/scripts/extensions/third-party/<名字>/index.js`（新版）或
+  `public/scripts/extensions/<名字>/index.js`（旧版），并**重启了 SillyTavern 服务端**（不是仅刷新页面）；
+  有红色报错 → 把报错内容发到 Issue。
 - **不朗读 / 没出现卡片**：确认扩展“启用”；模型是否真的输出了 `[[BetterTTS: {...}]]`；
   若用旧消息/切换聊天，卡片只对新消息自动渲染（点卡片可手动播）。
 - **提示词没生效（自动注入失败）**：控制台会有一次警告。请手动把提示词放进主提示词/系统提示词。

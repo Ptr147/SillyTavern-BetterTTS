@@ -43,26 +43,47 @@ function derr(...args) {
 
 // ---------------------------------------------------------------------------
 // ST 模块动态加载（避免静态依赖缺失导致整个扩展无法启动）
+// 注意：不同 SillyTavern 版本把第三方扩展放在不同深度：
+//   旧版：public/scripts/extensions/<名称>/index.js      → ../../extensions.js
+//   新版：public/scripts/extensions/third-party/<名称>/   → ../../../extensions.js
+// 因此这里按候选路径逐一探测，兼容两种布局。
 // ---------------------------------------------------------------------------
 let extension_settings = null;   // ST: extension_settings
 let extGetContext = null;        // ST: getContext()
 let eventSource = null;          // ST 旧事件源（可能为 null）
 
+const ST_REL_PATHS = {
+    extensions: ['../../../extensions.js', '../../extensions.js'],
+    script: ['../../../script.js', '../../script.js'],
+    slash: ['../../../slash-commands.js', '../../slash-commands.js'],
+};
+
+async function importFirst(group) {
+    let lastErr = null;
+    for (const path of ST_REL_PATHS[group] || []) {
+        try {
+            const mod = await import(/* webpackIgnore: true */ path);
+            dlog(`import ${path} OK`);
+            return { ok: true, mod };
+        } catch (e) {
+            lastErr = e;
+            dlog(`import ${path} 失败：`, e?.message || e);
+        }
+    }
+    return { ok: false, error: lastErr };
+}
+
 async function loadStModules() {
-    try {
-        const mod = await import('../../extensions.js');
-        extension_settings = mod.extension_settings;
-        extGetContext = mod.getContext || null;
-        dlog('import extensions.js OK, extension_settings =', !!extension_settings);
-    } catch (e) {
-        derr('无法 import ../../extensions.js（请确认本目录位于 public/scripts/extensions/<名称>/）', e);
+    const ext = await importFirst('extensions');
+    if (ext.ok) {
+        extension_settings = ext.mod.extension_settings;
+        extGetContext = ext.mod.getContext || null;
+        dlog('extension_settings 可用 =', !!extension_settings, ' getContext 可用 =', !!extGetContext);
+    } else {
+        derr('无法导入 extensions.js（候选路径均失败），请确认本目录位于 public/scripts/extensions/<名称>/ 或 extensions/third-party/<名称>/', ext.error);
     }
-    try {
-        const mod = await import('../../script.js');
-        eventSource = mod.eventSource || null;
-    } catch (e) {
-        dlog('script.js 事件源不可用（新版 ST 走 SillyTavern.on）', e?.message || e);
-    }
+    const scr = await importFirst('script');
+    if (scr.ok) eventSource = scr.mod.eventSource || null;
 }
 
 function ctx() {
@@ -686,14 +707,13 @@ async function registerSlashCommands() {
             return;
         }
     } catch { /* ignore */ }
-    try {
-        const mod = await import('../../slash-commands.js');
-        if (mod && typeof mod.registerSlashCommand === 'function') {
-            for (const c of cmds) mod.registerSlashCommand(c.name, c.callback, [], c.helpString, true);
-        }
-    } catch (e) {
-        console.warn('[BetterTTS] slash 命令注册失败（不影响核心功能）', e);
+    // 降级：老式 registerSlashCommand（按候选路径探测）
+    const sl = await importFirst('slash');
+    if (sl.ok && sl.mod && typeof sl.mod.registerSlashCommand === 'function') {
+        for (const c of cmds) sl.mod.registerSlashCommand(c.name, c.callback, [], c.helpString, true);
+        return;
     }
+    console.warn('[BetterTTS] slash 命令注册失败（不影响核心功能）');
 }
 
 // ---------------------------------------------------------------------------
