@@ -182,6 +182,27 @@ request = `{ text, voice, language, rate, emotion, character }`。
   角色名需与角色卡名称一致。
 - **想恢复原始文本**：关闭“启用”会立刻把已渲染卡片还原为原始函数调用文本。
 
-## 📄 License
+## 📄 License / 双许可
 
-MIT
+BetterTTS 采用 **双许可（Dual-License）** 策略：
+
+### 1. 开源社区 — GPL-3.0
+
+对开源社区与个人用户，BetterTTS 以 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
+（SPDX: `GPL-3.0-only`）发布，允许自由使用、修改与分发。
+GPL 是“传染性”协议：若你基于/集成本软件发布衍生作品，该作品也须以 GPL 兼容许可开源。
+官方完整文本：[gpl-3.0.txt](https://www.gnu.org/licenses/gpl-3.0.txt)。
+
+### 2. 商业用户 — 单独商业许可
+
+若你想在 **GPL 之外**更宽松的条件下使用 BetterTTS，典型场景包括：
+
+- 集成进**闭源商业产品 / 商业插件 / 在线服务（SaaS）**并对外销售或分发；
+- 以商业产品的一部分二次分发修改版；
+- 需要闭源、无传染性义务、可获得商业支持与优先维护。
+
+请**单独购买商业许可证**（授权范围与价格另行洽谈）。
+商业授权可通过本仓库 GitHub Issue（`Ptr147/SillyTavern-BetterTTS`）联系作者。
+在取得商业许可前，超出 GPL-3.0 允许范围的使用一律不被授权。
+
+> 详见仓库根目录 [`LICENSE`](LICENSE) 文件。

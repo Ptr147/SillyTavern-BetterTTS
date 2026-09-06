@@ -1,21 +1,25 @@
-MIT License
+BetterTTS 采用「双许可 / Dual-License」策略
+============================================
 
-Copyright (c) 2025 BetterTTS contributors
+1) 开源许可（面向开源社区）
+   BetterTTS 以 GNU General Public License v3.0（GPL-3.0）向开源社区发布。
+   你可以在遵守 GPL-3.0 的前提下自由使用、修改与分发本软件。
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+   - 官方完整文本（与本次发布绑定的是 v3，无 later 扩展）：
+       https://www.gnu.org/licenses/gpl-3.0.txt
+       https://www.gnu.org/licenses/gpl-3.0.html
+   - SPDX 标识：GPL-3.0-only
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2) 商业许可（面向商业用户）
+   若你希望以 GPL 之外更宽松的条款使用 BetterTTS —— 例如：
+   - 将 BetterTTS 集成进**闭源商业产品 / 插件 / SaaS 服务**并对外分发或销售；
+   - 修改后作为**商业软件的一部分**再分发；
+   - 或以其它不受 GPL 传染性约束的方式使用。
+   请**单独购买商业许可证**。商业授权内容（范围、价格、售后服务）另行约定，
+   可通过本仓库 GitHub Issue（Ptr147/SillyTavern-BetterTTS）联系作者洽谈。
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+   在未取得商业许可前，一切非 GPL-3.0 允许范围内的使用均不被授权。
+
+--------------------------------------------------
+提示：本文件为授权声明。若你的分发渠道要求展示完整协议文本，
+请将上方官方链接中的 GPL-3.0 全文附于本文件之后或随包提供。

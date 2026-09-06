@@ -7,7 +7,7 @@
   "homepage": "https://github.com/example/SillyTavern-BetterTTS",
   "repository": "https://github.com/example/SillyTavern-BetterTTS",
   "description": "让角色台词变成可点击播放的语音卡片：基于提示词函数调用 + 前端渲染，支持流式播放、按段朗读、旁白朗读、语速/音量调节，多 TTS 服务商适配器（Edge / OpenAI 兼容 / 自定义），并为不同角色指定说话人与语言。",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE (GPL-3.0-only for OSS / commercial license required)",
   "tags": ["tts", "speech", "audio", "function-call", "edge-tts"],
   "permissions": [],
   "minimumSillyTavernVersion": "1.12.0"

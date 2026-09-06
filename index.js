@@ -11,6 +11,7 @@
 //  6. TTS 适配器架构：Edge TTS / OpenAI 兼容 / 自定义 HTTP，支持获取音色列表
 //
 // 兼容：SillyTavern >= 1.12（对旧扩展 API 做了降级适配）。
+// 授权：双许可 —— 开源社区 GPL-3.0（SPDX: GPL-3.0-only）；商业使用需单独购买商业许可（见 LICENSE）。
 // ============================================================================
 
 import * as settings from './modules/settings.js';
