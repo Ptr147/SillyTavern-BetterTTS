@@ -226,6 +226,8 @@ export function buildSettingsHtml(opts = {}) {
           <button type="button" class="menu_button btts-btn btts-prompt-full-reset">恢复全文模式模板</button>
         </div>
       </fieldset>
+
+      <div class="btts-hint" style="margin-top:2px">提示词注入状态：<span class="btts-inject-status">—</span></div>
     </fieldset>
 
     <fieldset class="btts-fs">
@@ -256,11 +258,11 @@ export function buildSettingsHtml(opts = {}) {
     <div class="inline-drawer-toggle inline-drawer-header interactable btts-native-toggle">
       <div class="flex-container alignitemscenter margin0">
         <b>🔊 BetterTTS 设置</b>
-        <small class="marginLeft5" style="opacity:.65">v${EXT_VERSION} · 点击标题折叠/展开</small>
+        <small class="marginLeft5" style="opacity:.65">v${EXT_VERSION} · 点击标题展开设置</small>
       </div>
-      <div class="inline-drawer-icon fa-solid interactable up fa-circle-chevron-up btts-native-arrow" tabindex="0" role="button"></div>
+      <div class="inline-drawer-icon fa-solid interactable fa-circle-chevron-down btts-native-arrow" tabindex="0" role="button"></div>
     </div>
-    <div class="inline-drawer-content btts-native-content" style="display: block;">${inner}</div>
+    <div class="inline-drawer-content btts-native-content" style="display: none;">${inner}</div>
   </div>
 </div>`;
     }
@@ -490,7 +492,17 @@ export function bindSettings(rootEl, hooks = {}) {
 
     // 初始
     refreshAll();
-    return { refresh: refreshAll, get currentPrompt() { return currentPromptText(); } };
+    return {
+        refresh: refreshAll,
+        get currentPrompt() { return currentPromptText(); },
+        setInjectStatus(msg, ok) {
+            const el = $root.querySelector('.btts-inject-status');
+            if (!el) return;
+            if (!msg) { el.textContent = '—'; el.style.color = ''; return; }
+            el.textContent = msg;
+            el.style.color = ok ? '#2f9e44' : '#e03131';
+        },
+    };
 }
 
 export function settingsPanelHtml() { return buildSettingsHtml(); }

@@ -482,6 +482,7 @@ function onGenerationStart() {
     autoOff = false;
     handledCalls.clear();
     handledNarr.clear();
+    rearmInjectionBeforeGeneration();
     if (settings.get().streaming) schedulePoll();
 }
 
@@ -844,20 +845,67 @@ function refreshAllSettingsUi() {
 // ---------------------------------------------------------------------------
 // 提示词注入
 // ---------------------------------------------------------------------------
-let injectionState = { ok: false, method: null, attempted: false };
+let injectionState = { ok: false, method: null, attempted: false, warned: false };
+
+function modeLabel() {
+    return settings.get().prompt?.mode === 'full' ? '全文模式' : '说话模式';
+}
+
+function pushInjectStatus(msg, ok) {
+    for (const m of settingsMounts) {
+        try { if (typeof m.setInjectStatus === 'function') m.setInjectStatus(msg, ok); } catch { /* ignore */ }
+    }
+}
+
+/** 单次注册（失败不打断，返回结果） */
+async function tryInjectPrompt() {
+    const s = settings.get();
+    if (!promptApi.promptEnabled(s) || !promptApi.promptShouldInject(s)) return { ok: false, error: '未启用' };
+    return await promptApi.registerInjection(s, { getName: () => EXT_NAME, getContext: ctx });
+}
 
 async function refreshPromptInjection() {
-    const s = settings.get();
-    if (!promptApi.promptEnabled(s) || !promptApi.promptShouldInject(s)) return;
-    const res = await promptApi.registerInjection(s, { getName: () => EXT_NAME, getContext: ctx });
-    injectionState = { ok: res.ok, method: res.method, error: res.error, attempted: true };
+    const res = await tryInjectPrompt();
+    injectionState = { ok: res.ok, method: res.method, error: res.error, attempted: true, warned: injectionState.warned };
     if (res.ok) {
         dlog('提示词注入成功', res.entry);
-    } else if (!injectionState.warned) {
-        injectionState.warned = true;
-        derr('提示词自动注入失败：', res.error || '', promptApi.injectionNotice());
-        notify('提示词自动注入失败：' + (res.error || '未知原因') + '（详见控制台，可先手动把提示词复制进主提示词）', 'error');
+        pushInjectStatus('已注入（' + modeLabel() + '）', true);
+        return true;
     }
+    // 失败 → 自动重试（ST 上下文可能尚未就绪）
+    dlog('提示词注入未就绪，准备重试…', res.error || '');
+    pushInjectStatus('未注入，重试中…', false);
+    let tries = 0;
+    const timer = setInterval(async () => {
+        tries++;
+        const r2 = await tryInjectPrompt();
+        if (r2.ok) {
+            clearInterval(timer);
+            injectionState.ok = true;
+            injectionState.error = null;
+            dlog('提示词注入成功（重试）', r2.entry);
+            pushInjectStatus('已注入（' + modeLabel() + '）', true);
+            return;
+        }
+        if (tries >= 6) {
+            clearInterval(timer);
+            injectionState.error = r2.error || '';
+            pushInjectStatus('注入失败：' + (r2.error || '未知原因'), false);
+            if (!injectionState.warned) {
+                injectionState.warned = true;
+                derr('提示词自动注入失败：', r2.error || '', promptApi.injectionNotice());
+                notify('提示词自动注入失败：' + (r2.error || '未知原因') + '（详见控制台，可先手动把提示词复制进主提示词）', 'error');
+            }
+        }
+    }, 1500);
+    return false;
+}
+
+/** 每次生成前复注册（防止个别 ST 版本在生成时清空扩展提示词） */
+function rearmInjectionBeforeGeneration() {
+    tryInjectPrompt().then(r => {
+        if (r.ok) logDebug('生成前提示词复注册成功');
+    }).catch(() => { });
 }
 
 // ---------------------------------------------------------------------------
