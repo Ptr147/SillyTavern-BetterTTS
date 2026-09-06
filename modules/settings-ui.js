@@ -134,7 +134,7 @@ export function buildSettingsHtml(opts = {}) {
       </div>
       <div class="btts-slider-row">
         <label>音量 <b class="btts-out" data-out="volume"></b></label>
-        <input type="range" data-key="volume" min="0" max="1" step="0.05">
+        <input type="range" data-key="volume" min="0.05" max="1" step="0.05">
       </div>
     </fieldset>
 
