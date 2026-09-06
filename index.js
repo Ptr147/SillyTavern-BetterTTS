@@ -376,10 +376,13 @@ function stopAuto() {
 // ---------------------------------------------------------------------------
 // 渲染 & 播放器状态同步
 // ---------------------------------------------------------------------------
-const observer = renderer.createChatObserver('#chat', (elements) => {
+const observer = renderer.createChatObserver((elements) => {
     if (!settings.isEnabled()) return;
     for (const el of elements) {
-        try { renderer.renderElement(el); } catch (e) { logDebug('renderElement err', e); }
+        try {
+            const n = renderer.renderElement(el);
+            if (n > 0) logDebug('渲染语音卡片 x' + n, el.className);
+        } catch (e) { logDebug('renderElement err', e); }
     }
 });
 

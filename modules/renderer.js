@@ -205,10 +205,26 @@ export function renderElement(el) {
 }
 
 // ---------------------------------------------------------------------
-// MutationObserver 封装
+// MutationObserver 封装（不依赖 .mes_text/#chat 等具体类名/id）
 // ---------------------------------------------------------------------
 
-export function createChatObserver(targetSelector, onChangedElements) {
+/** 把一个节点解析为“消息根”（.mes 或离它最近的 .mes） */
+function mesRootOf(node) {
+    if (!node || node.nodeType !== 1) return null;
+    if (typeof node.classList === 'object' && node.classList.contains('mes')) return node;
+    return node.closest ? (node.closest('.mes') || null) : null;
+}
+
+/** 把可能包含消息的节点加入待处理集合（含其内部的全部 .mes） */
+function pushMesRoots(node, pending) {
+    const root = mesRootOf(node);
+    if (root) { pending.add(root); return; }
+    // 整个容器被重建/首屏加载时：addedNodes 可能是大的包装节点
+    const inner = node.querySelectorAll ? node.querySelectorAll('.mes') : [];
+    for (const m of inner) pending.add(m);
+}
+
+export function createChatObserver(onChangedElements) {
     let timer = null;
     const pending = new Set();
 
@@ -226,42 +242,34 @@ export function createChatObserver(targetSelector, onChangedElements) {
     const observer = new MutationObserver((mutations) => {
         for (const mu of mutations) {
             if (mu.type === 'characterData') {
-                const el = mu.target.parentElement?.closest?.('.mes_text') || null;
+                const el = mesRootOf(mu.target.parentElement);
                 if (el) pending.add(el);
                 continue;
             }
             // childList / subtree
-            if (mu.target?.nodeType === 1 && mu.target.classList?.contains('mes_text')) {
-                pending.add(mu.target);
-            }
+            if (mu.target?.nodeType === 1) pushMesRoots(mu.target, pending);
             for (const node of mu.addedNodes || []) {
-                if (node.nodeType !== 1) continue;
-                if (node.classList?.contains('mes_text')) { pending.add(node); continue; }
-                const inner = node.querySelector?.('.mes_text');
-                if (inner) pending.add(inner);
+                if (node.nodeType === 1) pushMesRoots(node, pending);
+                else if (node.nodeType === 3) {
+                    const el = mesRootOf(node.parentElement);
+                    if (el) pending.add(el);
+                }
             }
         }
         if (pending.size) schedule();
     });
 
-    let target = null;
+    let observing = false;
     const start = () => {
-        const el = document.querySelector(targetSelector);
-        if (!el) return false;
-        if (target === el) return true;
-        target = el;
-        observer.observe(el, { childList: true, subtree: true, characterData: true });
+        if (observing) return true;
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        observing = true;
         return true;
     };
-    const stop = () => { if (timer) { clearTimeout(timer); timer = null; } observer.disconnect(); target = null; pending.clear(); };
-    const rescanAll = (fn) => {
-        const root = document.querySelector(targetSelector);
-        if (!root) return;
-        const items = root.querySelectorAll('.mes_text');
-        onChangedElements(Array.from(items));
-    };
+    const stop = () => { if (timer) { clearTimeout(timer); timer = null; } observer.disconnect(); observing = false; pending.clear(); };
+    const rescanAll = () => { onChangedElements(Array.from(document.querySelectorAll('.mes'))); };
 
-    return { start, stop, flush, rescanAll, isConnected: () => !!target };
+    return { start, stop, flush, rescanAll, isConnected: () => observing };
 }
 
 /** 轻量清理 Markdown 记号，供朗读用（只读一次文本，不修改存储） */
@@ -276,17 +284,17 @@ export function scrubMarkdown(text) {
         .replace(/~~([^~]+)~~/g, '$1')
         .replace(/^#{1,6}\s*/gm, '')
         .replace(/^\s*>\s?/gm, '')
-        .replace(/[*_~]/g, '')
+               .replace(/[*_~]/g, '')
         .replace(/[ \t]+/g, ' ')
         .trim();
 }
 
 /**
- * 把当前可见聊天里的语音卡片还原成原始函数调用文本
+ * 把当前页面可见聊天里的语音卡片还原成原始函数调用文本
  * （禁用扩展 / 需要看到原始内容时调用）
  */
 export function revertVisibleChips() {
-    document.querySelectorAll('#chat .btts-seg').forEach(chip => {
+    document.querySelectorAll('.mes .btts-seg').forEach(chip => {
         const raw = chip.dataset.raw;
         if (raw === undefined) return;
         const textNode = document.createTextNode(raw);
@@ -294,11 +302,11 @@ export function revertVisibleChips() {
     });
 }
 
-/** 重新渲染 #chat 下所有消息（全量扫描，幂等） */
+/** 全量扫描当前可见的所有消息（幂等），把函数调用替换成气泡卡片 */
 export function scanVisible() {
-    const root = document.querySelector('#chat');
-    if (!root) return;
-    root.querySelectorAll('.mes_text').forEach(el => {
-        try { renderElement(el); } catch { /* ignore */ }
-    });
+    let count = 0;
+    for (const mes of document.querySelectorAll('.mes')) {
+        try { count += renderElement(mes); } catch { /* ignore */ }
+    }
+    return count;
 }

@@ -1,11 +1,9 @@
 /* ============================================================================
-   BetterTTS - 样式
-   自动跟随 SillyTavern 主题（使用其 CSS 变量，缺失时有安全回退值），
-   兼顾深色/浅色与多主题；如需深度定制，可在设置 → 高级 → 自定义 CSS 中覆盖。
-   ========================================================================== */
+   BetterTTS - 鏍峰紡
+   鑷姩璺熼殢 SillyTavern 涓婚锛堜娇鐢ㄥ叾 CSS 鍙橀噺锛岀己澶辨椂鏈夊畨鍏ㄥ洖閫€鍊硷級锛?   鍏奸【娣辫壊/娴呰壊涓庡涓婚锛涘闇€娣卞害瀹氬埗锛屽彲鍦ㄨ缃?鈫?楂樼骇 鈫?鑷畾涔?CSS 涓鐩栥€?   ========================================================================== */
 
-/* ---------- 变量回退 ---------- */
-.btts-settings, .btts-modal-root, .btts-popup-root, #chat .btts-seg, .btts-menu {
+/* ---------- 鍙橀噺鍥為€€ ---------- */
+.btts-settings, .btts-modal-root, .btts-popup-root, .mes .btts-seg, .btts-menu {
     --btts-body: var(--SmartThemeBodyColor, #3b3b3b);
     --btts-main: var(--SmartThemeMainColor, #3b7dd8);
     --btts-tint: var(--SmartThemeBlurTintColor, rgba(120, 120, 120, 0.12));
@@ -18,9 +16,8 @@
 }
 
 /* ============================================================================
-   语音卡片（聊天消息内）
-   ========================================================================== */
-#chat .btts-seg {
+   璇煶鍗＄墖锛堣亰澶╂秷鎭唴锛?   ========================================================================== */
+.mes .btts-seg {
     display: flex;
     align-items: flex-start;
     gap: 8px;
@@ -38,14 +35,14 @@
     -webkit-tap-highlight-color: transparent;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
-#chat .btts-seg:hover {
+.mes .btts-seg:hover {
     background: var(--btts-card-bg-hover);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
-#chat .btts-seg:active { transform: scale(0.995); }
-#chat .btts-seg:focus-visible { outline: 2px solid var(--btts-main, #3b7dd8); outline-offset: 1px; }
+.mes .btts-seg:active { transform: scale(0.995); }
+.mes .btts-seg:focus-visible { outline: 2px solid var(--btts-main, #3b7dd8); outline-offset: 1px; }
 
-#chat .btts-seg-play {
+.mes .btts-seg-play {
     flex: 0 0 auto;
     width: 26px;
     height: 26px;
@@ -61,16 +58,16 @@
     padding: 0;
     box-shadow: 0 1px 4px color-mix(in srgb, var(--btts-main, #3b7dd8) 40%, transparent);
 }
-#chat .btts-seg-play svg { fill: currentColor; }
-#chat .btts-seg-body { flex: 1 1 auto; min-width: 0; }
+.mes .btts-seg-play svg { fill: currentColor; }
+.mes .btts-seg-body { flex: 1 1 auto; min-width: 0; }
 
-#chat .btts-seg-head {
+.mes .btts-seg-head {
     display: flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
 }
-#chat .btts-seg-char {
+.mes .btts-seg-char {
     font-weight: 700;
     font-size: 0.82em;
     letter-spacing: 0.02em;
@@ -79,7 +76,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
-#chat .btts-seg-emotion {
+.mes .btts-seg-emotion {
     flex: 0 0 auto;
     font-size: 0.68em;
     padding: 1px 7px;
@@ -89,8 +86,8 @@
     color: var(--btts-muted);
     white-space: nowrap;
 }
-/* 右上角小字时间 */
-#chat .btts-seg-time {
+/* 鍙充笂瑙掑皬瀛楁椂闂?*/
+.mes .btts-seg-time {
     margin-left: auto;
     flex: 0 0 auto;
     font-size: 0.66em;
@@ -99,7 +96,7 @@
     font-variant-numeric: tabular-nums;
     user-select: none;
 }
-#chat .btts-seg-text {
+.mes .btts-seg-text {
     margin-top: 2px;
     font-size: 0.95em;
     color: var(--btts-body);
@@ -107,13 +104,13 @@
     overflow-wrap: anywhere;
     white-space: pre-wrap;
 }
-/* 播放中的呼吸动画 */
-#chat .btts-seg.btts-playing { border-left-color: var(--btts-main); }
-#chat .btts-seg.btts-playing .btts-seg-play {
+/* 鎾斁涓殑鍛煎惛鍔ㄧ敾 */
+.mes .btts-seg.btts-playing { border-left-color: var(--btts-main); }
+.mes .btts-seg.btts-playing .btts-seg-play {
     animation: btts-pulse 1.2s ease-in-out infinite;
 }
-#chat .btts-seg.btts-error .btts-seg-play { background: var(--btts-em, #c0392b); }
-#chat .btts-seg.btts-paused .btts-seg-play { background: var(--btts-main); opacity: 0.85; }
+.mes .btts-seg.btts-error .btts-seg-play { background: var(--btts-em, #c0392b); }
+.mes .btts-seg.btts-paused .btts-seg-play { background: var(--btts-main); opacity: 0.85; }
 
 @keyframes btts-pulse {
     0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--btts-main, #3b7dd8) 45%, transparent); }
@@ -123,8 +120,7 @@
 @keyframes btts-rotate { to { transform: rotate(360deg); } }
 
 /* ============================================================================
-   底部选项栏按钮
-   ========================================================================== */
+   搴曢儴閫夐」鏍忔寜閽?   ========================================================================== */
 .btts-bar {
     display: inline-flex;
     align-items: center;
@@ -153,7 +149,7 @@
 }
 
 /* ============================================================================
-   右键菜单
+   鍙抽敭鑿滃崟
    ========================================================================== */
 .btts-menu {
     z-index: 99999;
@@ -176,8 +172,7 @@
 .btts-menu li:hover { background: var(--btts-tint); color: var(--btts-main); }
 
 /* ============================================================================
-   角色弹窗（BetterTTS-角色）
-   ========================================================================== */
+   瑙掕壊寮圭獥锛圔etterTTS-瑙掕壊锛?   ========================================================================== */
 .btts-popup-root {
     position: fixed;
     inset: 0;
@@ -280,8 +275,7 @@
 .btts-addrow .btts-add-name { flex: 0 0 auto; }
 
 /* ============================================================================
-   设置弹窗（⚙）
-   ========================================================================== */
+   璁剧疆寮圭獥锛堚殭锛?   ========================================================================== */
 .btts-modal-root {
     position: fixed;
     inset: 0;
@@ -323,8 +317,7 @@
 .btts-modal-body { overflow-y: auto; padding: 14px 18px; }
 
 /* ============================================================================
-   设置区块（ST 扩展面板内 & 弹窗共用）
-   ========================================================================== */
+   璁剧疆鍖哄潡锛圫T 鎵╁睍闈㈡澘鍐?& 寮圭獥鍏辩敤锛?   ========================================================================== */
 .btts-settings { font-size: 0.92em; }
 .btts-settings-head {
     display: flex;
@@ -379,11 +372,11 @@
 .btts-voice-status, .btts-data-status { font-size: 0.78em; opacity: 0.7; }
 .btts-provider-panel { padding: 4px 2px 2px; }
 
-/* 深色主题轻微增强（ST 主要主题都会经变量自动适配；此处兜底） */
+/* 娣辫壊涓婚杞诲井澧炲己锛圫T 涓昏涓婚閮戒細缁忓彉閲忚嚜鍔ㄩ€傞厤锛涙澶勫厹搴曪級 */
 html.dark .btts-seg { --btts-body: #e6e6e6; }
 
 /* ============================================================================
-   折叠设置区（ST 扩展面板内）& 窄栏适配
+   鎶樺彔璁剧疆鍖猴紙ST 鎵╁睍闈㈡澘鍐咃級& 绐勬爮閫傞厤
    ========================================================================== */
 .btts-collapse {
     margin: 4px 0 12px;
@@ -404,7 +397,7 @@ html.dark .btts-seg { --btts-body: #e6e6e6; }
 }
 .btts-collapse > summary::-webkit-details-marker { display: none; }
 .btts-collapse > summary::before {
-    content: '▸';
+    content: '鈻?;
     display: inline-block;
     width: 1em;
     color: var(--btts-main);
@@ -417,7 +410,7 @@ html.dark .btts-seg { --btts-body: #e6e6e6; }
 .btts-collapse-body { padding: 6px 12px 12px; border-top: 1px solid var(--btts-border); }
 .btts-collapse[open] > summary { border-bottom: none; }
 
-/* 窄栏/溢出修复：面板内所有控件都参与收缩换行，避免按钮挤成一团 */
+/* 绐勬爮/婧㈠嚭淇锛氶潰鏉垮唴鎵€鏈夋帶浠堕兘鍙備笌鏀剁缉鎹㈣锛岄伩鍏嶆寜閽尋鎴愪竴鍥?*/
 .btts-settings { max-width: 100%; min-width: 0; box-sizing: border-box; }
 .btts-fs { min-width: 0; box-sizing: border-box; }
 .btts-inline { display: flex; flex-wrap: wrap; gap: 8px 12px; }
