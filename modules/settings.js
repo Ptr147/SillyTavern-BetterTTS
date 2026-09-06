@@ -41,9 +41,11 @@ export function hydrate() {
     if (!extensionSettings) return data;
     const current = extensionSettings[SETTINGS_KEY];
     const merged = mergeDeep(isPlainObject(current) ? current : {}, DEFAULTS);
-    // 数值钳制
+    // 数值钳制（volume=0/非法 时视为 1，避免“静音”式无声让用户以为坏了）
     merged.rate = Math.min(2, Math.max(0.5, Number(merged.rate) || 1));
-    merged.volume = Math.min(1, Math.max(0, Number(merged.volume) || 1));
+    let vol = Number(merged.volume);
+    if (!Number.isFinite(vol) || vol <= 0) vol = 1;
+    merged.volume = Math.min(1, Math.max(0.05, vol));
     merged.schemaVersion = DEFAULTS.schemaVersion;
     // 提示词为空 → 填充内置系统提示词（用户可在面板中直接查看/修改）
     if (!merged.prompt || typeof merged.prompt !== 'object') merged.prompt = structuredClone(DEFAULTS.prompt);

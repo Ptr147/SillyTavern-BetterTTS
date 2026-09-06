@@ -168,7 +168,8 @@ function entryForCall(callObj, key, speakerName = '') {
         rate: callObj.rate,
         emotion: callObj.emotion,
     });
-    const volumeFactor = Number.isFinite(Number(callObj.volume)) ? clamp(Number(callObj.volume), 0, 2) : 1;
+    const volumeFactor = (Number.isFinite(Number(callObj.volume)) && Number(callObj.volume) > 0)
+        ? clamp(Number(callObj.volume), 0, 2) : 1;
     const text = callObj.text || '';
     return {
         key,
