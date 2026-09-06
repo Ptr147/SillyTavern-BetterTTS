@@ -1,9 +1,18 @@
 // BetterTTS - 提示词管理（模板选择 + 注入）
 
-import { DEFAULT_PROMPT_TEXT } from './defaults.js';
+import { DEFAULT_PROMPT_TEXT, DEFAULT_FULL_PROMPT_TEXT } from './defaults.js';
 
-/** 取当前生效的提示词文本 */
+/** 当前合成模式：line（说话/函数分句）| full（全文朗读） */
+export function modeOf(s) {
+    return s?.prompt?.mode === 'full' ? 'full' : 'line';
+}
+
+/** 取当前生效的提示词文本（按合成模式选择对应模板） */
 export function promptTextOf(s) {
+    if (modeOf(s) === 'full') {
+        const t = s?.prompt?.fullText;
+        return (typeof t === 'string' && t.trim()) ? t : DEFAULT_FULL_PROMPT_TEXT;
+    }
     const t = s?.prompt?.text;
     return (typeof t === 'string' && t.trim()) ? t : DEFAULT_PROMPT_TEXT;
 }

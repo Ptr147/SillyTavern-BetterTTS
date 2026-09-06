@@ -1,19 +1,22 @@
 // BetterTTS - 聊天消息前端渲染（正则替换实现）
 //
-// 做法：对消息文本 HTML 用正则整体匹配 [[BetterTTS: {…}]]（允许跨行、允许中间的 <br> 等标签），
-// 把“函数调用”字符串级替换为渲染好的气泡 HTML：
-//   - 说话内容 + 右上角小字时间
-//   - 点击 播放/暂停（document 级委托，见 index.js）
-//   - 右键 弹出菜单（复制完整函数调用 / 复制文本等，见 index.js）
-//
-// 兼容多行/被标签切分的调用：捕获后先剥离标签、解码实体再 JSON.parse，
-// 因此不依赖调用是否“恰好完整落在一个文本节点”内。
+// 做法：对消息文本 HTML 用正则整体匹配：
+//   - [[BTTS: {…}]]（兼容旧名 BetterTTS）→ 渲染为内联气泡 HTML
+//   - [[BTTS-AddRole: {…}]] → 提取“角色声音描述”回调给 index（界面隐藏该行）
+// 允许跨行、允许中间的 <br> 等标签：捕获后先剥标签、解码实体再 JSON.parse。
 
 import { nowClock } from './util.js';
 
-const PREFIX_RE = /\[\[\s*BetterTTS\s*:/i;
-// 匹配一个完整的调用（含可能出现在中间的空格/换行/<br> 等）
-const CALL_RE = /\[\[\s*BetterTTS\s*:\s*(\{[\s\S]*?\})\s*\]\]/gi;
+/** 是否存在语音/角色调用标记 */
+const HAS_MARKER_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*(?::-|-)/i;
+/** 语音调用完整匹配 */
+const CALL_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*:\s*(\{[\s\S]*?\})\s*\]\]/gi;
+/** 角色注册调用完整匹配（含可能被 <br>/换行切分的内容） */
+const ROLE_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*-\s*AddRole\s*:\s*(\{[\s\S]*?\})\s*\]\]/gi;
+
+let roleListener = null; // (obj) => void 由 index 注入，用于接收角色注册
+
+export function setRoleListener(fn) { roleListener = fn; }
 
 let _mesIdResolver = null; // (el) => string 由 index 注入（可选）
 
@@ -95,47 +98,85 @@ function seqFor(mesEl) {
     return mesSeqMap.get(mesEl);
 }
 
+/** 由角色调用片段解析角色注册对象（JSON → 整段解码 → 简写“名字 描述”） */
+function roleObjFromPayload(payloadHtml, rawHtml) {
+    let obj = tryParseObj(payloadHtml);
+    if (obj && (obj.character || obj.name || obj.role)) return obj;
+    const whole = fragmentToText(rawHtml)
+        .replace(/^\[\[\s*(?:BetterTTS|BTTS)\s*-\s*AddRole\s*:\s*/, '')
+        .replace(/\s*\]\]$/, '');
+    obj = tryParseObj(whole);
+    if (obj && (obj.character || obj.name || obj.role)) return obj;
+    // 简写： BTTS-AddRole 小林：描述…
+    const clean = whole.trim();
+    const idx = clean.search(/\s|：|:/);
+    if (idx > 0) {
+        return { character: clean.slice(0, idx).trim(), voice: clean.slice(idx + 1).trim() };
+    }
+    return null;
+}
+
 /**
- * 在“叶子文本容器”上做正则整段替换。
+ * 在“叶子文本容器”上做正则整段替换（先剥离角色注册并上报，再转换语音调用）。
  * @param {HTMLElement} el 不含仍带调用的子元素的最深层容器
  * @param {()=>string} nextKey 生成下一条气泡的唯一 key
- * @returns {number} 替换的调用数
+ * @returns {number} 替换的语音调用数
  */
 function processTextContainer(el, nextKey) {
     const html0 = el.innerHTML || '';
-    if (!PREFIX_RE.test(html0)) return 0;
+    if (!HAS_MARKER_RE.test(html0)) return 0;
 
+    // ---- 1) 剥离 BTTS-AddRole 并上报（不在界面显示） ----
+    let cleaned = '';
+    let cur = 0;
+    {
+        const roleRe = new RegExp(ROLE_RE.source, 'gi');
+        let rm;
+        while ((rm = roleRe.exec(html0)) !== null) {
+            if (insideTag(html0, rm.index)) {
+                cleaned += html0.slice(cur, rm.index + rm[0].length);
+                cur = rm.index + rm[0].length;
+                continue;
+            }
+            cleaned += html0.slice(cur, rm.index);
+            const obj = roleObjFromPayload(rm[1], rm[0]);
+            if (obj && typeof roleListener === 'function') {
+                try { roleListener(obj); } catch { /* ignore */ }
+            }
+            cur = rm.index + rm[0].length;
+        }
+        cleaned += html0.slice(cur);
+    }
+
+    // ---- 2) 语音调用 → 气泡 ----
     const re = new RegExp(CALL_RE.source, 'gi');
     let out = '';
     let last = 0;
     let inserted = 0;
     let m;
 
-    while ((m = re.exec(html0)) !== null) {
-        if (insideTag(html0, m.index)) {
-            // 命中在标签/属性内部：保留原文，继续向后找
-            out += html0.slice(last, m.index + m[0].length);
+    while ((m = re.exec(cleaned)) !== null) {
+        if (insideTag(cleaned, m.index)) {
+            out += cleaned.slice(last, m.index + m[0].length);
             last = m.index + m[0].length;
             continue;
         }
         const matchAll = m[0];
         const payloadHtml = m[1];
-        // 先尝试标准 JSON；失败再尝试整段解码（兼容被标签切碎的情况）
         let obj = tryParseObj(payloadHtml);
         if (!obj) {
             const whole = fragmentToText(matchAll);
-            const inner = whole.replace(/^\[\[\s*BetterTTS\s*:\s*/, '').replace(/\s*\]\]$/, '');
+            const inner = whole.replace(/^\[\[\s*(?:BetterTTS|BTTS)\s*:\s*/, '').replace(/\s*\]\]$/, '');
             obj = tryParseObj(inner);
         }
         if (!obj) {
-            // 解析失败：保留原文，不消耗序号
-            out += html0.slice(last, m.index + matchAll.length);
+            out += cleaned.slice(last, m.index + matchAll.length);
             last = m.index + matchAll.length;
             continue;
         }
         const text = String(obj.text ?? '').trim();
         if (!text) {
-            out += html0.slice(last, m.index + matchAll.length);
+            out += cleaned.slice(last, m.index + matchAll.length);
             last = m.index + matchAll.length;
             continue;
         }
@@ -143,7 +184,7 @@ function processTextContainer(el, nextKey) {
         const emotion = String(obj.emotion || '').trim();
         const payload = payloadText(obj);
 
-        out += html0.slice(last, m.index);
+        out += cleaned.slice(last, m.index);
         out += chipHtml({
             key: nextKey(),
             character,
@@ -155,8 +196,8 @@ function processTextContainer(el, nextKey) {
         last = m.index + matchAll.length;
         inserted++;
     }
-    if (inserted) {
-        el.innerHTML = out + html0.slice(last);
+    if (inserted || cleaned !== html0) {
+        el.innerHTML = out + cleaned.slice(last);
     }
     return inserted;
 }
@@ -174,7 +215,7 @@ export function payloadText(obj) {
 
 /** 生成完整的调用文本（右键“复制完整函数调用”用） */
 export function wholeCallText(obj) {
-    return '[[BetterTTS: ' + payloadText(obj) + ']]';
+    return '[[BTTS: ' + payloadText(obj) + ']]';
 }
 
 /** 在可见气泡中按规范 payload 找同一声音段的气泡 key（供自动朗读高亮） */
@@ -194,7 +235,7 @@ export function findChipKeyByPayload(payload) {
  */
 export function renderElement(root) {
     if (!root || root.nodeType !== 1) return 0;
-    const markerIn = (el) => el && typeof el.innerHTML === 'string' && PREFIX_RE.test(el.innerHTML);
+    const markerIn = (el) => el && typeof el.innerHTML === 'string' && HAS_MARKER_RE.test(el.innerHTML);
     if (!markerIn(root)) return 0;
     const mesEl = root.classList?.contains('mes') ? root : (root.closest ? root.closest('.mes') || root : root);
     const seq = seqFor(mesEl);

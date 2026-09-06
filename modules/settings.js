@@ -1,6 +1,6 @@
 // BetterTTS - 配置数据管理（读写 extension_settings.betterTTS）
 
-import { DEFAULTS, SETTINGS_KEY, DEFAULT_PROMPT_TEXT } from './defaults.js';
+import { DEFAULTS, SETTINGS_KEY, DEFAULT_PROMPT_TEXT, DEFAULT_FULL_PROMPT_TEXT } from './defaults.js';
 import { prettyJson, safeParse } from './util.js';
 
 let extensionSettings = null; // ST 的 extension_settings 对象
@@ -47,9 +47,11 @@ export function hydrate() {
     if (!Number.isFinite(vol) || vol <= 0) vol = 1;
     merged.volume = Math.min(1, Math.max(0.05, vol));
     merged.schemaVersion = DEFAULTS.schemaVersion;
-    // 提示词为空 → 填充内置系统提示词（用户可在面板中直接查看/修改）
+    // 提示词为空 → 填充内置（系统）提示词，面板中可直接查看/编辑
     if (!merged.prompt || typeof merged.prompt !== 'object') merged.prompt = structuredClone(DEFAULTS.prompt);
     if (!String(merged.prompt.text || '').trim()) merged.prompt.text = DEFAULT_PROMPT_TEXT;
+    if (!String(merged.prompt.fullText || '').trim()) merged.prompt.fullText = DEFAULT_FULL_PROMPT_TEXT;
+    if (!merged.prompt.mode) merged.prompt.mode = 'line';
     extensionSettings[SETTINGS_KEY] = merged;
     data = merged;
     return data;
@@ -104,15 +106,30 @@ export function characterMap() {
     return data.characters;
 }
 
-/** 设置某角色（名称）的映射；voice/language 为空字符串表示清空该字段 */
+/** 设置某角色（名称）的映射；合并保留 voiceDescription 等附加字段，全空则删除该角色 */
 export function setCharacterMapping(name, mapping) {
     const map = characterMap();
+    const merged = { ...(map[name] || {}), ...(mapping || {}) };
     const cleaned = {};
-    if (mapping.voice) cleaned.voice = String(mapping.voice);
-    if (mapping.language) cleaned.language = String(mapping.language);
+    for (const [k, v] of Object.entries(merged)) {
+        if (v !== undefined && v !== null && String(v).trim() !== '') cleaned[k] = v;
+    }
     if (Object.keys(cleaned).length) map[name] = cleaned;
     else delete map[name];
     persist();
+}
+
+/** 删除某角色的完整映射（含声音描述） */
+export function removeCharacterMapping(name) {
+    const map = characterMap();
+    if (name && map[name]) { delete map[name]; persist(); }
+}
+
+/** 读取某角色已注册的“声音描述”（BTTS-AddRole） */
+export function voiceDescriptionOf(name) {
+    const map = characterMap();
+    if (name && map[name]) return String(map[name].voiceDescription || '').trim();
+    return '';
 }
 
 export function getCharacterMapping(name) {

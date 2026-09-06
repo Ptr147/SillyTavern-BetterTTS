@@ -23,7 +23,7 @@ import * as promptApi from './modules/prompt.js';
 import { player, PlayerStatus } from './modules/player.js';
 import { synthesize } from './modules/providers.js';
 import { debounce, clamp, copyText, nowClock, logDebug } from './modules/util.js';
-import { NARRATOR_KEY, EXT_VERSION } from './modules/defaults.js';
+import { NARRATOR_KEY, NARRATOR_ALIASES, EXT_VERSION } from './modules/defaults.js';
 
 const EXT_DISPLAY = 'BetterTTS';
 const EXT_NAME = 'BetterTTS';           // 注入提示词使用的注册名
@@ -158,6 +158,59 @@ function applyUserCss(cssText) {
 // 朗读任务构造（语音调用 / 旁白文本）
 // ---------------------------------------------------------------------------
 
+/** 查找角色已注册的声音描述（含旁白别称） */
+function voiceDescriptionOf(name) {
+    if (!name) return '';
+    const map = settings.characterMap();
+    const candidates = [name, ...(NARRATOR_ALIASES.includes(name) ? [] : NARRATOR_ALIASES)];
+    for (const cand of candidates) {
+        if (map[cand] && String(map[cand].voiceDescription || '').trim()) return String(map[cand].voiceDescription).trim();
+    }
+    return '';
+}
+
+/** 拼接“角色声音描述 + 情绪”为给 TTS 的系统指令 */
+function buildInstruction(name, emotion) {
+    const parts = [];
+    const desc = voiceDescriptionOf(name);
+    if (desc) parts.push('角色声音：' + desc);
+    const emo = String(emotion || '').trim();
+    if (emo) parts.push('情绪/语气：' + emo);
+    return parts.join('；');
+}
+
+/** 接收前端渲染剥离出的 BTTS-AddRole 注册 */
+function onRoleSeen(obj) {
+    try {
+        const name = String(obj?.character || obj?.name || obj?.role || '').trim();
+        const desc = String(obj?.voice || obj?.description || obj?.sound || obj?.desc || '').trim();
+        if (!name) return;
+        if (desc) {
+            const map = settings.characterMap();
+            settings.setCharacterMapping(name, { ...(map[name] || {}), voiceDescription: desc });
+            dlog('BTTS-AddRole 注册/更新 音色描述:', name);
+        }
+    } catch (e) { logDebug('AddRole 处理失败', e); }
+}
+
+/** 从原始消息文本里吸收角色注册（DOM 渲染之外的兜底） */
+function ingestRolesFromText(mesText) {
+    try {
+        for (const c of parser.findRoleCalls(String(mesText || ''))) {
+            if (c.obj) onRoleSeen(c.obj);
+        }
+    } catch { /* ignore */ }
+}
+
+/** 从当前聊天历史中吸收所有角色注册（换聊/载入时） */
+function ingestRolesFromChat() {
+    try {
+        for (const m of chatMessages()) {
+            if (m && typeof m.mes === 'string') ingestRolesFromText(m.mes);
+        }
+    } catch { /* ignore */ }
+}
+
 /** 依据调用对象构建朗读 entry（播放时实时读取设置） */
 function entryForCall(callObj, key, speakerName = '') {
     const character = String(callObj.character || speakerName || '').trim();
@@ -168,6 +221,7 @@ function entryForCall(callObj, key, speakerName = '') {
         rate: callObj.rate,
         emotion: callObj.emotion,
     });
+    const instruction = buildInstruction(character, callObj.emotion);
     const volumeFactor = (Number.isFinite(Number(callObj.volume)) && Number(callObj.volume) > 0)
         ? clamp(Number(callObj.volume), 0, 2) : 1;
     const text = callObj.text || '';
@@ -183,6 +237,7 @@ function entryForCall(callObj, key, speakerName = '') {
                 language: res.language,
                 rate: res.rate,
                 emotion: res.emotion,
+                instruction,
                 character,
             }, s);
             if (!r.ok) throw new Error(r.message);
@@ -193,9 +248,10 @@ function entryForCall(callObj, key, speakerName = '') {
     };
 }
 
-/** 依据普通文本构建朗读 entry（旁白等） */
+/** 依据普通文本构建朗读 entry（旁白/全文等） */
 function entryForText(text, key, character = NARRATOR_KEY) {
     const res = settings.resolveParams({ character, voice: '', language: '', rate: null, emotion: '' });
+    const instruction = buildInstruction(character, '');
     return {
         key,
         text,
@@ -208,6 +264,7 @@ function entryForText(text, key, character = NARRATOR_KEY) {
                 language: res.language,
                 rate: res.rate,
                 emotion: res.emotion,
+                instruction,
                 character,
             }, s);
             if (!r.ok) throw new Error(r.message);
@@ -319,6 +376,15 @@ async function autoHandleMessage(mes, { allowCalls, allowNarr, streamingNow }) {
     const s = settings.get();
     const base = mesBaseKey(mes);
 
+    // 角色注册始终吸收（说话/全文模式都需要声音描述）
+    ingestRolesFromText(mes.mes);
+
+    // 全文模式：只读 <context>…</context> 内容（在生成结束后整段朗读）
+    if (s.prompt?.mode === 'full') {
+        if (allowNarr) await autoHandleFull(mes, base);
+        return;
+    }
+
     if (allowCalls) {
         const entries = callEntries(mes);
         for (const e of entries) {
@@ -345,6 +411,54 @@ async function autoHandleMessage(mes, { allowCalls, allowNarr, streamingNow }) {
     }
 }
 
+/** 全文模式：提取 <openTag>…</closeTag> 内容（标签可配置）；未找到且开启兜底时读整条 */
+function extractFullContent(raw) {
+    const s = settings.get();
+    const p = s.prompt || {};
+    const open = String(p.fullTagsOpen || '<context>');
+    const close = String(p.fullTagsClose || '</context>');
+    let content = '';
+    if (open && close && raw.includes(open)) {
+        const parts = [];
+        let from = 0;
+        let start = raw.indexOf(open, from);
+        while (start >= 0) {
+            const end = raw.indexOf(close, start + open.length);
+            if (end < 0) break;
+            parts.push(raw.slice(start + open.length, end));
+            from = end + close.length;
+            start = raw.indexOf(open, from);
+        }
+        content = parts.join('\n').trim();
+    }
+    if (!content && p.fullFallbackNoTags !== false) {
+        content = renderer.scrubMarkdown(raw);
+    }
+    return content;
+}
+
+/** 全文模式朗读队列 */
+async function autoHandleFull(mes, base) {
+    const s = settings.get();
+    if (!s.readNarration) return; // 朗读开关（旁白 / 全文共用）
+    const content = extractFullContent(mes.mes || '');
+    if (!content) return;
+    const entries = [];
+    if (s.perSegment) {
+        parser.splitSentences(content).forEach((t, i) => {
+            if (t.trim()) entries.push(entryForText(t.trim(), `full:${base}:${i}`));
+        });
+    } else {
+        entries.push(entryForText(content, `full:${base}:0`));
+    }
+    for (const e of entries) {
+        const hkey = 'full:' + base + '|' + e.key;
+        if (handledNarr.has(hkey)) continue;
+        handledNarr.add(hkey);
+        player.enqueue(e);
+    }
+}
+
 function schedulePoll() {
     if (pollTimer) return;
     pollTimer = setTimeout(async () => {
@@ -353,6 +467,8 @@ function schedulePoll() {
         const mes = lastNonUserMes();
         if (mes && isSpokenMessage(mes)) {
             const s = settings.get();
+            // 全文模式：生成结束后整段朗读，不做边出边读
+            if (s.prompt?.mode === 'full') { if (generating) schedulePoll(); return; }
             if (s.streaming) {
                 await autoHandleMessage(mes, { allowCalls: true, allowNarr: false, streamingNow: true });
             }
@@ -792,6 +908,7 @@ async function registerSlashCommands() {
 function onChatContextChanged() {
     handledCalls.clear();
     handledNarr.clear();
+    ingestRolesFromChat();
     charpopup.refreshOpenPopup();
 }
 
@@ -825,6 +942,7 @@ async function init() {
     player.onState(onPlayerState);
 
     // 渲染
+    renderer.setRoleListener(onRoleSeen);   // BTTS-AddRole → 角色声音描述
     if (!observer.start()) {
         // #chat 可能尚未出现，稍后重试
         const retry = setInterval(() => {
@@ -834,6 +952,7 @@ async function init() {
     }
     // 打开已有聊天时全量渲染一次（幂等）
     setTimeout(scanAllVisible, 600);
+    setTimeout(ingestRolesFromChat, 1600); // 载入历史消息后吸收 BTTS-AddRole
 
     // 设置挂载（立即尝试一次；ST 部分 UI 渲染较晚，配合下方定时重试）
     ensureMounts();

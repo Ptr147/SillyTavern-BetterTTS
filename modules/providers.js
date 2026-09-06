@@ -258,7 +258,10 @@ async function openaiSynthesize(request, cfg) {
         speed,
     };
     if (cfg.responseFormat && cfg.responseFormat !== 'mp3') body.response_format = cfg.responseFormat;
-    if (cfg.sendInstructions) {
+    // 系统指令 = “角色声音描述 + 情绪/语气”（由 index 拼接好传入 request.instruction）
+    if (request.instruction && cfg.autoInstructions !== false) {
+        body.instructions = String(request.instruction).trim();
+    } else if (cfg.sendInstructions) {
         const instructions = fillTemplate(cfg.instructionsTemplate || '', { ...request, voice, rate: speed });
         if (instructions.trim()) body.instructions = instructions.trim();
     }
@@ -341,7 +344,7 @@ async function openaiVoices(cfg) {
 // 自定义 HTTP 接口
 // =====================================================================
 
-const CUSTOM_VARS = ['text', 'voice', 'language', 'lang', 'rate', 'volume', 'emotion', 'character'];
+const CUSTOM_VARS = ['text', 'voice', 'language', 'lang', 'rate', 'volume', 'emotion', 'character', 'instruction'];
 
 function buildVars(request) {
     const v = {
@@ -353,6 +356,7 @@ function buildVars(request) {
         volume: num(request.volume, 1),
         emotion: request.emotion ?? '',
         character: request.character ?? '',
+        instruction: request.instruction ?? '',
     };
     return v;
 }

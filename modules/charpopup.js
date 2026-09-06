@@ -156,10 +156,8 @@ export function openCharacterPopup(opts = {}) {
         if (clearBtn) {
             const row = clearBtn.closest('.btts-crow');
             const name = row.dataset.name;
-            row.querySelector('[data-field="voice"]').value = '';
-            const sel = row.querySelector('[data-field="language"]');
-            if (sel) sel.value = '';
-            settings.setCharacterMapping(name, { voice: '', language: '' });
+            settings.removeCharacterMapping(name);
+            render(snapshotRows());
             return;
         }
         const addBtn = e.target.closest('.btts-add-name');
@@ -167,7 +165,7 @@ export function openCharacterPopup(opts = {}) {
             const input = popupEl.querySelector('#btts-new-name');
             const name = (input?.value || '').trim();
             if (name) {
-                settings.setCharacterMapping(name, { voice: '', language: '' });
+                settings.setCharacterMapping(name, { added: true });
                 if (input) input.value = '';
                 render(snapshotRows());
             }

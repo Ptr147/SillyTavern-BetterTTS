@@ -3,7 +3,7 @@
 // 支持：导出/导入全部配置（JSON）、恢复默认、提示词编辑/导入/导出、
 // 音色获取等。
 
-import { LANGUAGES, DEFAULT_PROMPT_TEXT, EXT_VERSION } from './defaults.js';
+import { LANGUAGES, DEFAULT_PROMPT_TEXT, DEFAULT_FULL_PROMPT_TEXT, EXT_VERSION } from './defaults.js';
 import * as settings from './settings.js';
 import { escapeHtml, downloadTextFile, pickTextFile, num, debounce } from './util.js';
 import { PROVIDER_DEFS } from './providers.js';
@@ -50,8 +50,9 @@ const PROVIDER_UI = {
         <label>音频格式 response_format（mp3/wav/opus/aac/flac/pcm）</label>
         <input type="text" data-path="providers.openai.responseFormat" class="text_pole btts-inp" placeholder="mp3">
       </div>
-      <div class="btts-field btts-inline">
-        <label class="btts-check"><input type="checkbox" data-path="providers.openai.sendInstructions">发送 instructions（支持情感指令的模型，如 gpt-4o-mini-tts）</label>
+      <div class="btts-inline btts-check">
+        <label class="btts-check"><input type="checkbox" data-path="providers.openai.sendInstructions">发送 instructions（gpt-4o-mini-tts 等支持）</label>
+        <label class="btts-check" title="有角色声音描述/情绪时自动拼接为系统指令 instructions 发送"><input type="checkbox" data-path="providers.openai.autoInstructions">自动把角色声音+情绪拼为 instructions</label>
       </div>
       <div class="btts-field">
         <label>instructions 模板（支持 {{text}} {{emotion}} {{character}} {{rate}}）</label>
@@ -172,15 +173,16 @@ export function buildSettingsHtml(opts = {}) {
     </fieldset>
 
     <fieldset class="btts-fs">
-      <legend>提示词</legend>
+      <legend>提示词与合成模式</legend>
       <div class="btts-hint">
-        提示词会引导模型把角色台词输出为函数调用格式
-        <code>[[BetterTTS: {&quot;text&quot;:&quot;…&quot;,&quot;character&quot;:&quot;…&quot;,&quot;voice&quot;:&quot;…&quot;,&quot;rate&quot;:1,&quot;emotion&quot;:&quot;…&quot;,&quot;language&quot;:&quot;…&quot;}]]</code>，
-        再由前端正则替换为语音卡片。<b>内容为空时会自动填入内置（系统）提示词并显示在下方</b>，可直接查看与编辑。
+        两种模式使用不同提示词与朗读逻辑：<b>说话模式</b> = 台词输出为函数调用
+        <code>[[BTTS: {…}]]</code> / <code>[[BTTS-AddRole: {…}]]</code>，逐句渲染成可点击气泡；
+        <b>全文模式</b> = 只朗读标签（默认 <code>&lt;context&gt;…&lt;/context&gt;</code>，可配置）内的整段全文。
+        内容为空时自动填入内置模板并显示在下方，可直接查看与编辑。
       </div>
       <div class="btts-inline">
         <label class="btts-check"><input type="checkbox" data-key="prompt.enabled">启用提示词</label>
-        <label class="btts-check" title="自动注入到发送给模型的提示词中（需要 ST 支持扩展提示词注入）"><input type="checkbox" data-key="prompt.inject">自动注入</label>
+        <label class="btts-check" title="自动注入到发送给模型的提示词中（注入当前模式对应的提示词）"><input type="checkbox" data-key="prompt.inject">自动注入</label>
         <label>注入位置
           <select data-key="prompt.position" class="text_pole">
             <option value="in_prompt">主提示词（in_prompt）</option>
@@ -188,18 +190,42 @@ export function buildSettingsHtml(opts = {}) {
             <option value="after_chat">聊天后（after_chat）</option>
           </select>
         </label>
+        <label>合成模式
+          <select data-key="prompt.mode" class="text_pole">
+            <option value="line">说话模式（函数调用分句）</option>
+            <option value="full">全文朗读模式（只读标签内全文）</option>
+          </select>
+        </label>
       </div>
-      <div class="btts-field">
-        <label>提示词内容</label>
+
+      <fieldset class="btts-fs">
+        <legend>说话模式提示词（BTTS / BTTS-AddRole 函数调用）</legend>
         <textarea data-key="prompt.text" class="text_pole btts-inp btts-ta-lg" spellcheck="false"
-          placeholder="（内置系统提示词内容已自动填入，可在此修改）"></textarea>
-      </div>
-      <div class="btts-inline">
-        <button type="button" class="menu_button btts-btn btts-prompt-reset">恢复默认模板</button>
-        <button type="button" class="menu_button btts-btn btts-prompt-copy">复制提示词</button>
-        <button type="button" class="menu_button btts-btn btts-prompt-export">导出(.txt)</button>
-        <button type="button" class="menu_button btts-btn btts-prompt-import">导入(.txt/.json)</button>
-      </div>
+          placeholder="（内置提示词已自动填入，可在此修改）"></textarea>
+        <div class="btts-inline">
+          <button type="button" class="menu_button btts-btn btts-prompt-reset">恢复说话模式模板</button>
+          <button type="button" class="menu_button btts-btn btts-prompt-copy">复制当前提示词</button>
+          <button type="button" class="menu_button btts-btn btts-prompt-export">导出(.txt)</button>
+          <button type="button" class="menu_button btts-btn btts-prompt-import">导入(.txt/.json)</button>
+        </div>
+      </fieldset>
+
+      <fieldset class="btts-fs">
+        <legend>全文模式提示词（&lt;context&gt;…&lt;/context&gt;）</legend>
+        <textarea data-key="prompt.fullText" class="text_pole btts-inp btts-ta-lg" spellcheck="false"
+          placeholder="（内置全文提示词已自动填入，可在此修改）"></textarea>
+        <div class="btts-inline">
+          <label>开始标签
+            <input type="text" data-key="prompt.fullTagsOpen" class="text_pole" style="width:120px">
+          </label>
+          <label>结束标签
+            <input type="text" data-key="prompt.fullTagsClose" class="text_pole" style="width:120px">
+          </label>
+          <label class="btts-check" title="全文模式未找到标签时改为朗读整条内容">
+            <input type="checkbox" data-key="prompt.fullFallbackNoTags">无标签时朗读整条</label>
+          <button type="button" class="menu_button btts-btn btts-prompt-full-reset">恢复全文模式模板</button>
+        </div>
+      </fieldset>
     </fieldset>
 
     <fieldset class="btts-fs">
@@ -397,16 +423,21 @@ export function bindSettings(rootEl, hooks = {}) {
     el('.btts-prompt-reset')?.addEventListener('click', () => {
         setByPath('prompt.text', DEFAULT_PROMPT_TEXT);
         refreshAll();
-        notify('已填入内置（系统）提示词内容');
+        notify('已填入内置说话模式提示词');
+    });
+    el('.btts-prompt-full-reset')?.addEventListener('click', () => {
+        setByPath('prompt.fullText', DEFAULT_FULL_PROMPT_TEXT);
+        refreshAll();
+        notify('已填入内置全文模式提示词');
     });
     el('.btts-prompt-copy')?.addEventListener('click', async () => {
         const { copyText } = await import('./util.js');
         const ok = await copyText(currentPromptText());
-        notify(ok ? '提示词已复制' : '复制失败', ok ? 'ok' : 'err');
+        notify(ok ? '提示词已复制（当前模式）' : '复制失败', ok ? 'ok' : 'err');
     });
     el('.btts-prompt-export')?.addEventListener('click', () => {
         downloadTextFile('bettertts-prompt.txt', currentPromptText(), 'text/plain');
-        notify('已导出提示词');
+        notify('已导出提示词（当前模式）');
     });
     el('.btts-prompt-import')?.addEventListener('click', async () => {
         const file = await pickTextFile('.txt,.json,text/plain,application/json');
@@ -419,10 +450,11 @@ export function bindSettings(rootEl, hooks = {}) {
                 if (typeof text === 'string') content = text;
             }
         } catch { /* 纯文本 */ }
-        if (!content.trim()) content = DEFAULT_PROMPT_TEXT; // 空文件 → 内置内容
-        setByPath('prompt.text', content);
+        const mode = s().prompt?.mode === 'full' ? 'full' : 'line';
+        if (!content.trim()) content = mode === 'full' ? DEFAULT_FULL_PROMPT_TEXT : DEFAULT_PROMPT_TEXT;
+        setByPath(mode === 'full' ? 'prompt.fullText' : 'prompt.text', content);
         refreshAll();
-        notify('提示词已导入');
+        notify('提示词已导入（当前模式）');
     });
 
     // 数据按钮
@@ -449,8 +481,11 @@ export function bindSettings(rootEl, hooks = {}) {
     });
 
     function currentPromptText() {
-        const t = s().prompt?.text || '';
-        return t.trim() ? t : DEFAULT_PROMPT_TEXT;
+        const d = s();
+        const mode = d.prompt?.mode === 'full' ? 'full' : 'line';
+        const t = mode === 'full' ? d.prompt?.fullText : d.prompt?.text;
+        if (t && String(t).trim()) return String(t).trim();
+        return mode === 'full' ? DEFAULT_FULL_PROMPT_TEXT : DEFAULT_PROMPT_TEXT;
     }
 
     // 初始

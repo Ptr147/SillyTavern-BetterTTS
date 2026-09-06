@@ -1,36 +1,33 @@
-// BetterTTS - 语音调用解析器
+// BetterTTS - 语音/角色调用解析器
 // 识别的函数调用格式（正则驱动 + 引号感知的收尾匹配）：
 //
-//   [[BetterTTS: { "text": "...", "character": "...", "voice": "...",
-//                  "rate": 1.0, "emotion": "...", "language": "..." }]]
+//   语音（说话模式）：  [[BTTS: { "text": "...", "character": "...", ... }]]  （兼容旧名 BetterTTS）
+//   角色注册（声音描述）：[[BTTS-AddRole: { "character": "...", "voice": "声音描述" }]]
 //
 // 说明：
-//  - 内容采用类 JSON 的对象字面量，text 为必填。
+//  - 内容采用类 JSON 的对象字面量；语音调用 text 必填。
 //  - 正文里不应出现 [[ 或 ]]（模板中已约束）。
-//  - 若模型只输出了一半（未闭合），解析器会跳过该片段（视为“进行中”），
-//    以保证流式生成过程中不会把残缺调用当完整调用处理。
+//  - 若模型只输出了一半（未闭合），解析器会跳过该片段（视为“进行中”）。
 
-/** 匹配 [[BetterTTS: 前缀（大小写不敏感，冒号后允许空白） */
-const PREFIX_RE = /\[\[\s*BetterTTS\s*:\s*/i;
-/**
- * 解析一段文本中的所有语音调用。
- * @param {string} text 原始消息文本
- * @returns {Array<{raw:string,start:number,end:number,pos:number,obj:object|null}>}
- *          pos 为第几个调用（0 起），obj 为解析后的对象（解析失败为 null）
- */
-export function findCalls(text) {
+/** 语音调用前缀（新名 BTTS，兼容旧名 BetterTTS；不含 -AddRole） */
+const SPEECH_PREFIX = /\[\[\s*(?:BetterTTS|BTTS)\s*:\s*/i;
+/** 角色注册前缀 */
+const ROLE_PREFIX = /\[\[\s*(?:BetterTTS|BTTS)\s*-\s*AddRole\s*:\s*/i;
+
+/** 通用扫描：按给定前缀找“闭合的函数调用” */
+function scanCalls(text, prefixRe) {
     if (!text || typeof text !== 'string') return [];
     const out = [];
     let pos = 0;
     let i = 0;
     while (i < text.length) {
         const rest = text.slice(i);
-        const m = PREFIX_RE.exec(rest);
+        const m = prefixRe.exec(rest);
         if (!m) break;
         const start = i + m.index;
         const openIdx = start + m[0].length;
 
-        // 找到闭合的 "]]"（引号感知：JSON 字符串中的 ] 不参与收尾）
+        // 引号感知找闭合的 "]]"
         let braceDepth = 0;
         let inStr = false;
         let escape = false;
@@ -49,11 +46,7 @@ export function findCalls(text) {
             if (ch === '}') { braceDepth = Math.max(0, braceDepth - 1); continue; }
             if (ch === ']' && next === ']' && braceDepth <= 0) { closeIdx = j; break; }
         }
-        if (closeIdx < 0) {
-            // 未闭合：可能是流式生成到一半；终止（后面不会再出现有效调用）
-            // 仍推进扫描，避免死循环。
-            break;
-        }
+        if (closeIdx < 0) break; // 未闭合：可能在流式生成中
         const raw = text.slice(start, closeIdx + 2);
         const payload = text.slice(openIdx, closeIdx);
         let obj = null;
@@ -61,16 +54,31 @@ export function findCalls(text) {
             const parsed = JSON.parse(payload);
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) obj = parsed;
         } catch { obj = null; }
-
         out.push({ raw, payload, start, end: closeIdx + 2, pos: pos++, obj });
         i = closeIdx + 2;
     }
     return out;
 }
 
-/** 该文本是否包含至少一个（哪怕是半截的）调用标记 */
+/**
+ * 解析语音调用 [[BTTS: {...}]]（兼容旧名 [[BetterTTS: …]]）
+ * @returns {Array<{raw,payload,start,end,pos,obj}>} pos 为第几个调用（0 起）
+ */
+export function findCalls(text) {
+    return scanCalls(text, SPEECH_PREFIX);
+}
+
+/**
+ * 解析角色注册调用 [[BTTS-AddRole: {…}]]
+ * @returns {Array<{raw,payload,start,end,pos,obj}>}
+ */
+export function findRoleCalls(text) {
+    return scanCalls(text, ROLE_PREFIX);
+}
+
+/** 文本是否包含语音或角色调用标记（含半截的） */
 export function hasMarker(text) {
-    return typeof text === 'string' && PREFIX_RE.test(text);
+    return typeof text === 'string' && (SPEECH_PREFIX.test(text) || ROLE_PREFIX.test(text));
 }
 
 /**
