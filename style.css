@@ -374,3 +374,64 @@
 
 /* 深色主题轻微增强（ST 主要主题都会经变量自动适配；此处兜底） */
 html.dark .btts-seg { --btts-body: #e6e6e6; }
+
+/* ============================================================================
+   折叠设置区（ST 扩展面板内）& 窄栏适配
+   ========================================================================== */
+.btts-collapse {
+    margin: 4px 0 12px;
+    border: 1px solid var(--btts-border);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #fff) 10%, transparent);
+    overflow: hidden;
+}
+.btts-collapse > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    padding: 10px 14px;
+    user-select: none;
+}
+.btts-collapse > summary::-webkit-details-marker { display: none; }
+.btts-collapse > summary::before {
+    content: '▸';
+    display: inline-block;
+    width: 1em;
+    color: var(--btts-main);
+    transition: transform 0.12s ease;
+}
+.btts-collapse[open] > summary::before { transform: rotate(90deg); }
+.btts-collapse > summary:hover { background: var(--btts-tint); }
+.btts-summary-title { font-weight: 800; font-size: 0.98em; }
+.btts-summary-sub { font-size: 0.76em; opacity: 0.6; }
+.btts-collapse-body { padding: 6px 12px 12px; border-top: 1px solid var(--btts-border); }
+.btts-collapse[open] > summary { border-bottom: none; }
+
+/* 窄栏/溢出修复：面板内所有控件都参与收缩换行，避免按钮挤成一团 */
+.btts-settings { max-width: 100%; min-width: 0; box-sizing: border-box; }
+.btts-fs { min-width: 0; box-sizing: border-box; }
+.btts-inline { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.btts-field { min-width: 0; }
+.btts-field > textarea, .btts-field > input, .btts-field > select,
+.btts-inline > select, .btts-inline > input, .btts-slider-row input {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.btts-btn {
+    min-height: 28px;
+    padding: 3px 10px;
+    font-size: 0.84em;
+    line-height: 1.3;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+.btts-check { flex-wrap: nowrap; }
+.btts-slider-row { flex-wrap: wrap; }
+.btts-ta-lg, .btts-ta-sm { width: 100%; box-sizing: border-box; font-family: inherit; }
+.btts-fs legend { max-width: 100%; }
+@media (max-width: 480px) {
+    .btts-btn { flex: 1 1 auto; text-align: center; }
+}

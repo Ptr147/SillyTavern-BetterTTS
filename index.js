@@ -571,7 +571,7 @@ function mountIntoSettingsPanel() {
     if (host.querySelector('.btts-settings')) { settingsPanelMounted = true; return true; }
     try {
         const wrap = document.createElement('div');
-        wrap.innerHTML = settingsUI.buildSettingsHtml();
+        wrap.innerHTML = settingsUI.buildSettingsHtml({ panel: true });
         const node = wrap.firstElementChild;
         const api = settingsUI.bindSettings(node, makeUiHooks());
         host.appendChild(node);

@@ -108,9 +108,12 @@ const PROVIDER_UI = {
       </div>`,
 };
 
-/** 组装设置区块 HTML */
-export function buildSettingsHtml() {
-    return `
+/**
+ * 组装设置区块 HTML
+ * @param {{panel?:boolean}} opts panel=true（ST 扩展面板内挂载）时整体套一层可折叠的 <details>
+ */
+export function buildSettingsHtml(opts = {}) {
+    const inner = `
   <div class="btts-settings" data-uid="${uid()}">
     <div class="btts-settings-head">
       <span class="btts-settings-title">🔊 BetterTTS <em>v${EXT_VERSION}</em></span>
@@ -218,6 +221,18 @@ export function buildSettingsHtml() {
       </div>
     </fieldset>
   </div>`;
+
+    if (opts.panel) {
+        // 扩展面板内：整块收进折叠区（默认收起，点标题展开），避免挤占其它扩展
+        return `<details class="btts-collapse">
+  <summary class="btts-summary">
+    <span class="btts-summary-title">🔊 BetterTTS 设置</span>
+    <span class="btts-summary-sub">点击展开 / 收起 · 开关、服务商、提示词、角色映射、导入导出</span>
+  </summary>
+  <div class="btts-collapse-body">${inner}</div>
+</details>`;
+    }
+    return inner;
 }
 
 /** 绑定某个挂载实例 */
