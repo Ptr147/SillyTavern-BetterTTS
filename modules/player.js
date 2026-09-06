@@ -161,6 +161,28 @@ export class BetterTTSPlayer {
             audio.play().then(() => {
                 if (this.current !== entry) { try { audio.pause(); } catch { /* ignore */ } return; }
                 this._emitEntry(entry, PlayerStatus.PLAYING);
+                if (globalThis.__BETTER_TTS_DEBUG__) {
+                    try {
+                        const log = (...a) => console.info('[BetterTTS]', ...a);
+                        log('播放开始 volume=' + audio.volume + ' mime=' + (entry.mime || mime) + ' size=' + blob.size);
+                        audio.addEventListener('loadedmetadata', () => log('loadedmetadata duration=' + audio.duration + 's'));
+                        let noted = false;
+                        audio.addEventListener('timeupdate', () => {
+                            if (!noted) { noted = true; log('正在推进 currentTime=' + audio.currentTime.toFixed(2) + 's'); }
+                        });
+                        setTimeout(() => {
+                            log('0.7s检查', {
+                                currentTime: audio.currentTime,
+                                paused: audio.paused,
+                                ended: audio.ended,
+                                readyState: audio.readyState,
+                                networkState: audio.networkState,
+                                volume: audio.volume,
+                                duration: Number.isFinite(audio.duration) ? audio.duration : null,
+                            });
+                        }, 700);
+                    } catch (e) { console.info('[BetterTTS] 播放诊断失败', e); }
+                }
             }).catch((e) => {
                 if (this.current !== entry) return; // 已停止，忽略
                 done(false);
