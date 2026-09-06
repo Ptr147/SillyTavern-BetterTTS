@@ -705,14 +705,15 @@ let injectionState = { ok: false, method: null, attempted: false };
 async function refreshPromptInjection() {
     const s = settings.get();
     if (!promptApi.promptEnabled(s) || !promptApi.promptShouldInject(s)) return;
-    const res = await promptApi.registerInjection(s, { getName: () => EXT_NAME });
-    if (!res.ok && !injectionState.attempted) {
-        // 只在首次失败时提醒（避免刷屏）
-        injectionState.attempted = true;
-        console.warn('[BetterTTS] 提示词自动注入不可用：', promptApi.injectionNotice());
+    const res = await promptApi.registerInjection(s, { getName: () => EXT_NAME, getContext: ctx });
+    injectionState = { ok: res.ok, method: res.method, error: res.error, attempted: true };
+    if (res.ok) {
+        dlog('提示词注入成功', res.entry);
+    } else if (!injectionState.warned) {
+        injectionState.warned = true;
+        derr('提示词自动注入失败：', res.error || '', promptApi.injectionNotice());
+        notify('提示词自动注入失败：' + (res.error || '未知原因') + '（详见控制台，可先手动把提示词复制进主提示词）', 'error');
     }
-    injectionState = { ...injectionState, ok: res.ok, method: res.method };
-    logDebug('prompt 注入结果', res);
 }
 
 // ---------------------------------------------------------------------------
