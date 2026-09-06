@@ -19,54 +19,53 @@
 
 /* ============================================================================
    内联语音气泡（融入文字流，不独占整行）
-   类似“引号”效果：略放大的气泡包围台词；右上角小字为时间
+   结构：说话者 | “台词” | 右上角小字时间；无播放图标（整块可点击/右键）
    ========================================================================== */
 .mes .btts-seg {
     display: inline;
     position: relative;
     margin: 0 2px;
-    padding: 1px 8px 2px 4px;
+    padding: 1px 9px 2px 5px;
     border-radius: 12px;
     background: var(--btts-card-bg);
     border: 1px solid var(--btts-border);
     color: var(--btts-body);
     cursor: pointer;
-    font-size: 1.04em;           /* 比正文略大一点，像加大号的引号 */
-    line-height: 1.55;
+    font-size: 1.0em;
+    line-height: 1.6;
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
     -webkit-tap-highlight-color: transparent;
     transition: background 0.12s ease, box-shadow 0.12s ease;
-    user-select: none;
 }
 .mes .btts-seg:hover {
     background: var(--btts-card-bg-hover);
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
 }
-.mes .btts-seg:active { opacity: 0.85; }
+.mes .btts-seg:active { opacity: 0.8; }
 .mes .btts-seg:focus-visible { outline: 2px solid var(--btts-main, #3b7dd8); outline-offset: 1px; }
 
-.mes .btts-seg-play {
-    display: inline-block;
-    width: 15px;
-    height: 15px;
-    padding: 0;
-    margin: 0 3px 0 0;
-    border: none;
-    border-radius: 50%;
-    background: var(--btts-main, #3b7dd8);
-    color: #fff;
-    vertical-align: -2px;
-    line-height: 1;
-    cursor: pointer;
+/* 左侧说话者 */
+.mes .btts-seg-speaker {
+    margin-right: 3px;
+    font-weight: 700;
+    font-size: 0.78em;
+    color: var(--btts-main);
+    opacity: 0.9;
 }
-.mes .btts-seg-play svg {
-    width: 9px;
-    height: 9px;
-    margin: 2px;
-    fill: currentColor;
-    display: block;
+
+/* 稍微加大的引号 “ ” */
+.mes .btts-quote {
+    font-size: 1.25em;
+    line-height: 0;
+    font-weight: 700;
+    color: var(--btts-main);
+    opacity: 0.75;
+    -webkit-user-select: none;
+    user-select: none;
 }
+.mes .btts-quote-open { margin-right: 1px; }
+.mes .btts-quote-close { margin-left: 1px; }
 
 .mes .btts-seg-text {
     display: inline;
@@ -78,31 +77,31 @@
 /* 右上角小字时间（悬浮于气泡右上） */
 .mes .btts-seg-time {
     position: absolute;
-    top: -10px;
+    top: -11px;
     right: -2px;
     font-size: 0.6em;
     line-height: 1;
     color: var(--btts-muted);
     opacity: 0.75;
     font-variant-numeric: tabular-nums;
-    background: transparent;
     pointer-events: none;
     white-space: nowrap;
     user-select: none;
 }
 
-/* 播放状态 */
-.mes .btts-seg.btts-playing .btts-seg-play { animation: btts-pulse 1.1s ease-in-out infinite; }
-.mes .btts-seg.btts-error .btts-seg-play { background: var(--btts-em, #c0392b); }
-.mes .btts-seg.btts-paused .btts-seg-play { background: var(--btts-main); opacity: 0.8; }
-.mes .btts-seg.btts-loading .btts-seg-play { animation: btts-rotate 0.9s linear infinite; }
+/* 播放/暂停/加载/出错状态：高亮 + 呼吸 */
+.mes .btts-seg.btts-playing {
+    border-color: var(--btts-main);
+    animation: btts-breathe 1.2s ease-in-out infinite;
+}
+.mes .btts-seg.btts-paused { opacity: 0.72; }
+.mes .btts-seg.btts-loading { border-style: dashed; }
+.mes .btts-seg.btts-error { border-color: var(--btts-em, #c0392b); background: color-mix(in srgb, var(--btts-em, #c0392b) 10%, transparent); }
 
-@keyframes btts-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--btts-main, #3b7dd8) 45%, transparent); }
+@keyframes btts-breathe {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--btts-main, #3b7dd8) 40%, transparent); }
     50% { box-shadow: 0 0 0 4px transparent; }
 }
-@keyframes btts-rotate { to { transform: rotate(360deg); } }
-.btts-spin { animation: btts-rotate 0.9s linear infinite; display: inline-block; }
 
 /* ============================================================================
    底部兜底按钮（仅当找不到“…菜单”时显示）

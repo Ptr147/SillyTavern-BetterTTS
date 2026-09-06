@@ -32,48 +32,33 @@ export function mesIdOf(el) {
     return 'x';
 }
 
-// ---------------------------------------------------------------------
-// 图标
-// ---------------------------------------------------------------------
-const PLAY_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
-const PAUSE_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
-const LOAD_ICON = '<svg class="btts-spin" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10h-2.4A7.6 7.6 0 1 1 12 4.4z"/></svg>';
-
 function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-/** 构造内联气泡 HTML（span，融入文字流；属性只存不含 [[ 前缀的 JSON，避免被自身正则二次匹配） */
+/** 构造内联气泡 HTML（span，融入文字流）
+ *  结构：说话者 | “台词” | 右上时间；不显示播放图标（整块可点击/右键）
+ *  属性只存不含 [[ 前缀的 JSON，避免被自身正则二次匹配 */
 function chipHtml({ key, character, emotion, payload, text, time }) {
+    const speaker = character ? `<span class="btts-seg-speaker">${esc(character)}</span>` : '';
     return `<span class="btts-seg" data-key="${esc(key)}" data-payload="${esc(payload)}" data-char="${esc(character || '')}" data-emotion="${esc(emotion || '')}" role="button" tabindex="0" title="点击播放/暂停 · 右键更多操作">`
-        + `<button type="button" class="btts-seg-play" aria-hidden="true">${PLAY_ICON}</button>`
+        + speaker
+        + `<span class="btts-quote btts-quote-open" aria-hidden="true">“</span>`
         + `<span class="btts-seg-text">${esc(text)}</span>`
+        + `<span class="btts-quote btts-quote-close" aria-hidden="true">”</span>`
         + `<time class="btts-seg-time">${esc(time || nowClock())}</time>`
         + `</span>`;
 }
 
-/** 更新卡片图标状态（由播放器状态驱动） */
+/** 更新气泡状态类（无播放图标：通过气泡高亮/呼吸表达播放、暂停等） */
 export function setChipState(chip, status) {
     if (!chip || chip.dataset.playing === status) return;
     chip.dataset.playing = status || '';
     chip.classList.remove('btts-playing', 'btts-paused', 'btts-loading', 'btts-error');
-    const btn = chip.querySelector('.btts-seg-play');
-    if (!btn) return;
-    if (status === 'playing') {
-        btn.innerHTML = PAUSE_ICON;
-        chip.classList.add('btts-playing');
-    } else if (status === 'paused') {
-        btn.innerHTML = PLAY_ICON;
-        chip.classList.add('btts-paused');
-    } else if (status === 'loading') {
-        btn.innerHTML = LOAD_ICON;
-        chip.classList.add('btts-loading');
-    } else if (status === 'error') {
-        btn.innerHTML = PLAY_ICON;
-        chip.classList.add('btts-error');
-    } else {
-        btn.innerHTML = PLAY_ICON;
-    }
+    if (status === 'playing') chip.classList.add('btts-playing');
+    else if (status === 'paused') chip.classList.add('btts-paused');
+    else if (status === 'loading') chip.classList.add('btts-loading');
+    else if (status === 'error') chip.classList.add('btts-error');
 }
 
 // ---------------------------------------------------------------------
