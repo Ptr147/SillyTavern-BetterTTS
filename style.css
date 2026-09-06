@@ -80,23 +80,34 @@
    全文段落气泡（BTTS-TEXT）：极简 —— 几乎不改变背景色，仅用边框颜色区分
    ========================================================================== */
 .mes .btts-seg.btts-text-seg {
+    display: block;
+    position: relative;
+    margin: 6px 0;
+    padding: 6px 12px 7px;
+    border: 1px solid color-mix(in srgb, var(--btts-main, #3b7dd8) 38%, transparent);
+    border-radius: 10px;
     background: transparent;
-    border: 1px solid color-mix(in srgb, var(--btts-main, #3b7dd8) 42%, transparent);
-    border-radius: 8px;
-    padding: 0 8px 1px;
-    margin: 0 2px;
+    color: var(--btts-body);
+    line-height: inherit;
     font-size: 1em;
-    line-height: 1.6;
     white-space: normal;
 }
-.mes .btts-seg.btts-text-seg .btts-seg-time { display: none; }
+.mes .btts-seg.btts-text-seg .btts-seg-time,
+.mes .btts-seg.btts-text-seg .btts-seg-ind,
+.mes .btts-seg.btts-text-seg .btts-quote { display: none; }
+.mes .btts-seg.btts-text-seg .btts-seg-text {
+    display: block;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
 .mes .btts-seg.btts-text-seg:hover {
-    background: color-mix(in srgb, var(--btts-main, #3b7dd8) 6%, transparent);
+    background: color-mix(in srgb, var(--btts-main, #3b7dd8) 5%, transparent);
 }
 .mes .btts-seg.btts-text-seg.btts-playing {
     border-color: var(--btts-main);
-    background: color-mix(in srgb, var(--btts-main, #3b7dd8) 5%, transparent);
+    background: color-mix(in srgb, var(--btts-main, #3b7dd8) 6%, transparent);
 }
+.mes .btts-seg.btts-text-seg.btts-paused { opacity: 0.7; }
 
 /* 稍微加大的引号 “ ”：使用独立颜色 */
 .mes .btts-quote {

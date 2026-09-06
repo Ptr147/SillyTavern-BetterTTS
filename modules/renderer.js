@@ -134,18 +134,31 @@ export function textPayload(obj) {
     return JSON.stringify({ text: String(obj.text ?? ''), ...(clean.length ? { roles: clean } : {}) });
 }
 
-/** 构造段落（全文）句子级极简气泡：几乎透明背景，仅以边框颜色区分；不显示时间避免杂乱 */
+/** 构造全文段块（BTTS-TEXT）：正文按原文排版，仅外框区分；无引号/圆点/时间 */
 function textChipHtml({ key, payload, text }) {
-    return `<span class="btts-seg btts-text-seg" data-kind="text" data-key="${esc(key)}" data-payload="${esc(payload)}" role="button" tabindex="0" title="点击播放/暂停这句 · 右键更多操作">`
-        + `<span class="btts-seg-ind" aria-hidden="true"></span>`
+    return `<span class="btts-seg btts-text-seg" data-kind="text" data-key="${esc(key)}" data-payload="${esc(payload)}" role="button" tabindex="0" title="点击播放/暂停这段 · 右键更多操作">`
         + `<span class="btts-seg-text">${esc(text)}</span>`
         + `</span>`;
 }
 
-/** 段落文本按句拆分（供渲染使用） */
-function splitForChips(text) {
+/** 把段落文本切成“几句一小段”：每段约 2~4 句或 ~120 字（尊重原分段），每段一个外框 */
+function chunkForChips(text) {
     const sents = splitSentences(text);
-    return sents.length ? sents : [text];
+    if (!sents.length) return [text];
+    const chunks = [];
+    let cur = '';
+    let count = 0;
+    for (const s of sents) {
+        cur = cur ? cur + s : s;
+        count++;
+        if (count >= 3 || cur.length >= 120) {
+            chunks.push(cur);
+            cur = '';
+            count = 0;
+        }
+    }
+    if (cur) chunks.push(cur);
+    return chunks;
 }
 
 /**
@@ -205,16 +218,15 @@ function processTextContainer(el, nextKey) {
 
             out += source.slice(last, m.index);
             if (kind === 'text') {
-                // 段落按句拆成多个极简边框段（每句一个，可单独点击播放）
-                const sents = splitForChips(text);
-                const basePayload = textPayload(obj);
-                sents.forEach((sent, i) => {
+                // 段落按“几句一小段”切成多个带边框的文本块（正文保持原样）
+                const chunks = chunkForChips(text);
+                chunks.forEach((chunk, i) => {
                     out += textChipHtml({
                         key: nextKey(),
-                        payload: textPayload({ ...obj, text: sent }),
-                        text: sent,
+                        payload: textPayload({ ...obj, text: chunk }),
+                        text: chunk,
                     });
-                    if (i < sents.length - 1) out += ' ';
+                    if (i < chunks.length - 1) out += '\n';
                 });
             } else {
                 const character = String(obj.character || obj.name || '').trim();
