@@ -264,10 +264,12 @@ function entryForCall(callObj, key, speakerName = '') {
     };
 }
 
-/** 依据普通文本构建朗读 entry（旁白/全文等） */
-function entryForText(text, key, character = NARRATOR_KEY) {
+/** 依据普通文本构建朗读 entry（旁白/段落/全文等）
+ *  @param {string|null} [instruction] 指定系统指令（段落：拼入本段角色声音+情绪）；缺省=按旁白描述
+ */
+function entryForText(text, key, character = NARRATOR_KEY, instruction) {
     const res = settings.resolveParams({ character, voice: '', language: '', rate: null, emotion: '' });
-    const instruction = buildInstruction(character, '');
+    const finalInstruction = instruction !== undefined ? (instruction || '') : buildInstruction(character, '');
     return {
         key,
         text,
@@ -280,7 +282,7 @@ function entryForText(text, key, character = NARRATOR_KEY) {
                 language: res.language,
                 rate: res.rate,
                 emotion: res.emotion,
-                instruction,
+                instruction: finalInstruction,
                 character,
             }, s);
             if (!r.ok) throw new Error(r.message);
@@ -289,6 +291,39 @@ function entryForText(text, key, character = NARRATOR_KEY) {
             return r.blobs;
         },
     };
+}
+
+/** 把段落 roles（角色+情绪）拼成系统指令（含各角色已注册声音描述） */
+function instructionForRoles(roles) {
+    const parts = [];
+    const list = Array.isArray(roles) ? roles : [];
+    for (const r of list) {
+        if (!r || typeof r !== 'object') continue;
+        const n = String(r.character || '').trim();
+        if (!n) continue;
+        const d = voiceDescriptionOf(n);
+        if (d) parts.push('角色「' + n + '」声音：' + d);
+        const em = String(r.emotion || r.mood || '').trim();
+        if (em) parts.push('「' + n + '」情绪/语气：' + em);
+    }
+    return parts.join('；');
+}
+
+/** 把一个消息里的“全文段落调用”（BTTS-TEXT）转成朗读任务（每段一个） */
+function textCallEntries(mes) {
+    const calls = parser.findTextCalls(mes.mes || '');
+    const out = [];
+    const mesId = mes.id !== undefined ? mes.id : chatMessages().indexOf(mes);
+    for (const c of calls) {
+        if (!c.obj) continue;
+        const text = String(c.obj.text ?? '').trim();
+        if (!text) continue;
+        const instr = instructionForRoles(c.obj.roles) || undefined;
+        const entry = entryForText(text, `txt:${mesId}:${c.pos}`, NARRATOR_KEY, instr);
+        entry.payloadText = renderer.textPayload(c.obj);
+        out.push(entry);
+    }
+    return out;
 }
 
 /** 将文本按旁白规则切成若干 entry（读旁白/按段时用） */
@@ -366,6 +401,7 @@ function callEntries(mes) {
 let generating = false;
 let handledCalls = new Set();   // 已自动排队的语音调用 key
 let handledNarr = new Set();
+let handledText = new Set();    // 已自动排队的全文段落 key
 let pollTimer = null;
 let autoOff = false;            // 用户手动停止开关（在一次生成内）
 
@@ -395,9 +431,21 @@ async function autoHandleMessage(mes, { allowCalls, allowNarr, streamingNow }) {
     // 角色注册始终吸收（说话/全文模式都需要声音描述）
     ingestRolesFromText(mes.mes);
 
-    // 全文模式：只读 <context>…</context> 内容（在生成结束后整段朗读）
+    // 全文模式：按“段落调用 BTTS-TEXT”逐段朗读（流式时每完成一段即播一段）
     if (s.prompt?.mode === 'full') {
-        if (allowNarr) await autoHandleFull(mes, base);
+        if (!(allowCalls || allowNarr)) return;
+        const entries = textCallEntries(mes);
+        for (const e of entries) {
+            if (e.payloadText) {
+                const chipKey = renderer.findChipKeyByPayload(e.payloadText);
+                if (chipKey) e.aliasKeys = [chipKey];
+                delete e.payloadText;
+            }
+            const hkey = 'txt:' + base + '|' + e.key;
+            if (handledText.has(hkey)) continue;
+            handledText.add(hkey);
+            player.enqueue(e);
+        }
         return;
     }
 
@@ -427,53 +475,7 @@ async function autoHandleMessage(mes, { allowCalls, allowNarr, streamingNow }) {
     }
 }
 
-/** 全文模式：提取 <openTag>…</closeTag> 内容（标签可配置）；未找到且开启兜底时读整条 */
-function extractFullContent(raw) {
-    const s = settings.get();
-    const p = s.prompt || {};
-    const open = String(p.fullTagsOpen || '<context>');
-    const close = String(p.fullTagsClose || '</context>');
-    let content = '';
-    if (open && close && raw.includes(open)) {
-        const parts = [];
-        let from = 0;
-        let start = raw.indexOf(open, from);
-        while (start >= 0) {
-            const end = raw.indexOf(close, start + open.length);
-            if (end < 0) break;
-            parts.push(raw.slice(start + open.length, end));
-            from = end + close.length;
-            start = raw.indexOf(open, from);
-        }
-        content = parts.join('\n').trim();
-    }
-    if (!content && p.fullFallbackNoTags !== false) {
-        content = renderer.scrubMarkdown(raw);
-    }
-    return content;
-}
-
-/** 全文模式朗读队列 */
-async function autoHandleFull(mes, base) {
-    const s = settings.get();
-    if (!s.readNarration) return; // 朗读开关（旁白 / 全文共用）
-    const content = extractFullContent(mes.mes || '');
-    if (!content) return;
-    const entries = [];
-    if (s.perSegment) {
-        parser.splitSentences(content).forEach((t, i) => {
-            if (t.trim()) entries.push(entryForText(t.trim(), `full:${base}:${i}`));
-        });
-    } else {
-        entries.push(entryForText(content, `full:${base}:0`));
-    }
-    for (const e of entries) {
-        const hkey = 'full:' + base + '|' + e.key;
-        if (handledNarr.has(hkey)) continue;
-        handledNarr.add(hkey);
-        player.enqueue(e);
-    }
-}
+/** 全文模式朗读队列（段落级 BTTS-TEXT：见 textCallEntries 逻辑，此函数不再使用） */
 
 function schedulePoll() {
     if (pollTimer) return;
@@ -483,9 +485,8 @@ function schedulePoll() {
         const mes = lastNonUserMes();
         if (mes && isSpokenMessage(mes)) {
             const s = settings.get();
-            // 全文模式：生成结束后整段朗读，不做边出边读
-            if (s.prompt?.mode === 'full') { if (generating) schedulePoll(); return; }
             if (s.streaming) {
+                // 流式：说话模式读已完成语音调用；全文模式读已完成段落
                 await autoHandleMessage(mes, { allowCalls: true, allowNarr: false, streamingNow: true });
             }
         }
@@ -498,6 +499,7 @@ function onGenerationStart() {
     autoOff = false;
     handledCalls.clear();
     handledNarr.clear();
+    handledText.clear();
     rearmInjectionBeforeGeneration();
     if (settings.get().streaming) schedulePoll();
 }
@@ -579,9 +581,9 @@ document.addEventListener('contextmenu', (e) => {
 function entryFromChip(chip) {
     const payload = chip.dataset.payload || chip.dataset.raw || '';
     let obj = null;
-    if (payload.trim().startsWith('[[BetterTTS')) {
-        const calls = parser.findCalls(payload);
-        if (calls.length && calls[0].obj) obj = calls[0].obj;
+    if (payload.trim().startsWith('[[')) {
+        const src = payload;
+        obj = parser.findCalls(src)[0]?.obj || parser.findTextCalls(src)[0]?.obj || parser.findRoleCalls(src)[0]?.obj || null;
     } else {
         try {
             const parsed = JSON.parse(payload);
@@ -589,6 +591,11 @@ function entryFromChip(chip) {
         } catch { /* ignore */ }
     }
     if (obj) {
+        if (chip.dataset.kind === 'text' || obj.roles) {
+            const text = String(obj.text ?? '').trim();
+            const instr = instructionForRoles(obj.roles) || undefined;
+            return entryForText(text, chip.dataset.key, NARRATOR_KEY, instr);
+        }
         const norm = parser.normalizeCall(obj, {});
         return entryForCall(norm, chip.dataset.key, chip.dataset.char);
     }
@@ -601,7 +608,8 @@ let menuEl = null;
 function showChipMenu(chip, x, y) {
     hideChipMenu();
     const payload = chip.dataset.payload || chip.dataset.raw || '';
-    const rawCall = payload.trim().startsWith('[[BetterTTS') ? payload : '[[BetterTTS: ' + payload + ']]';
+    const isText = chip.dataset.kind === 'text';
+    const rawCall = payload.trim().startsWith('[[') ? payload : (isText ? '[[BTTS-TEXT: ' : '[[BTTS: ') + payload + ']]';
     const text = chip.querySelector('.btts-seg-text')?.textContent || '';
     menuEl = document.createElement('div');
     menuEl.className = 'btts-menu';

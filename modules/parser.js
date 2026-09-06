@@ -9,10 +9,12 @@
 //  - 正文里不应出现 [[ 或 ]]（模板中已约束）。
 //  - 若模型只输出了一半（未闭合），解析器会跳过该片段（视为“进行中”）。
 
-/** 语音调用前缀（新名 BTTS，兼容旧名 BetterTTS；不含 -AddRole） */
+/** 语音调用前缀（新名 BTTS，兼容旧名 BetterTTS；不含 -AddRole/-TEXT） */
 const SPEECH_PREFIX = /\[\[\s*(?:BetterTTS|BTTS)\s*:\s*/i;
 /** 角色注册前缀 */
 const ROLE_PREFIX = /\[\[\s*(?:BetterTTS|BTTS)\s*-\s*AddRole\s*:\s*/i;
+/** 全文段落前缀（BTTS-TEXT） */
+const TEXT_PREFIX = /\[\[\s*(?:BetterTTS|BTTS)\s*-\s*TEXT\s*:\s*/i;
 
 /** 通用扫描：按给定前缀找“闭合的函数调用” */
 function scanCalls(text, prefixRe) {
@@ -76,9 +78,17 @@ export function findRoleCalls(text) {
     return scanCalls(text, ROLE_PREFIX);
 }
 
-/** 文本是否包含语音或角色调用标记（含半截的） */
+/**
+ * 解析全文段落调用 [[BTTS-TEXT: {…}]]
+ * @returns {Array<{raw,payload,start,end,pos,obj}>}
+ */
+export function findTextCalls(text) {
+    return scanCalls(text, TEXT_PREFIX);
+}
+
+/** 文本是否包含语音/角色/段落调用标记（含半截的） */
 export function hasMarker(text) {
-    return typeof text === 'string' && (SPEECH_PREFIX.test(text) || ROLE_PREFIX.test(text));
+    return typeof text === 'string' && (SPEECH_PREFIX.test(text) || ROLE_PREFIX.test(text) || TEXT_PREFIX.test(text));
 }
 
 /**

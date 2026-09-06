@@ -76,6 +76,24 @@
 }
 @keyframes btts-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
+/* ============================================================================
+   全文段落气泡（BTTS-TEXT）：极简 —— 几乎不改变背景色，仅用边框颜色区分
+   ========================================================================== */
+.mes .btts-seg.btts-text-seg {
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--btts-main, #3b7dd8) 42%, transparent);
+    border-radius: 10px;
+    padding: 1px 10px 2px;
+    font-size: 1em;
+}
+.mes .btts-seg.btts-text-seg:hover {
+    background: color-mix(in srgb, var(--btts-main, #3b7dd8) 6%, transparent);
+}
+.mes .btts-seg.btts-text-seg.btts-playing {
+    border-color: var(--btts-main);
+    background: color-mix(in srgb, var(--btts-main, #3b7dd8) 5%, transparent);
+}
+
 /* 稍微加大的引号 “ ”：使用独立颜色 */
 .mes .btts-quote {
     font-size: 1.2em;

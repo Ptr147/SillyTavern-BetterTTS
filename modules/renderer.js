@@ -13,6 +13,8 @@ const HAS_MARKER_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*(:|-)/i;
 const CALL_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*:\s*(\{[\s\S]*?\})\s*\]\]/gi;
 /** 角色注册调用完整匹配（含可能被 <br>/换行切分的内容） */
 const ROLE_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*-\s*AddRole\s*:\s*(\{[\s\S]*?\})\s*\]\]/gi;
+/** 全文段落调用完整匹配 */
+const TEXT_CALL_RE = /\[\[\s*(?:BetterTTS|BTTS)\s*-\s*TEXT\s*:\s*(\{[\s\S]*?\})\s*\]\]/gi;
 
 let roleListener = null; // (obj) => void 由 index 注入，用于接收角色注册
 
@@ -117,11 +119,32 @@ function roleObjFromPayload(payloadHtml, rawHtml) {
     return null;
 }
 
+/** 由对象生成段落调用（BTTS-TEXT）的规范 JSON（含 roles） */
+export function textPayload(obj) {
+    const roles = Array.isArray(obj.roles) ? obj.roles : [];
+    const clean = roles
+        .map(r => {
+            const o = {};
+            if (r && r.character) o.character = String(r.character).trim();
+            if (r && r.emotion) o.emotion = String(r.emotion).trim();
+            return o;
+        })
+        .filter(o => o.character);
+    return JSON.stringify({ text: String(obj.text ?? ''), ...(clean.length ? { roles: clean } : {}) });
+}
+
+/** 构造段落（全文）极简气泡：几乎透明背景，仅以边框颜色区分 */
+function textChipHtml({ key, payload, text, time }) {
+    return `<span class="btts-seg btts-text-seg" data-kind="text" data-key="${esc(key)}" data-payload="${esc(payload)}" role="button" tabindex="0" title="点击播放/暂停整段 · 右键更多操作">`
+        + `<span class="btts-seg-ind" aria-hidden="true"></span>`
+        + `<span class="btts-seg-text">${esc(text)}</span>`
+        + `<time class="btts-seg-time">${esc(time || nowClock())}</time>`
+        + `</span>`;
+}
+
 /**
- * 在“叶子文本容器”上做正则整段替换（先剥离角色注册并上报，再转换语音调用）。
- * @param {HTMLElement} el 不含仍带调用的子元素的最深层容器
- * @param {()=>string} nextKey 生成下一条气泡的唯一 key
- * @returns {number} 替换的语音调用数
+ * 在“叶子文本容器”上做正则整段替换：
+ * 1) 剥离 BTTS-AddRole 并上报；2) BTTS-TEXT→段落极简气泡；3) BTTS→内联语音气泡。
  */
 function processTextContainer(el, nextKey) {
     const html0 = el.innerHTML || '';
@@ -149,61 +172,55 @@ function processTextContainer(el, nextKey) {
         cleaned += html0.slice(cur);
     }
 
-    // ---- 2) 语音调用 → 气泡 ----
-    const re = new RegExp(CALL_RE.source, 'gi');
-    let out = '';
-    let last = 0;
-    let inserted = 0;
-    let m;
+    // ---- 2) 通用替换：source -> 处理后字符串，返回替换数量 ----
+    const runPass = (source, re, kind) => {
+        const parseWhole = (raw) => raw.replace(/^\[\[\s*(?:BetterTTS|BTTS)(?:-TEXT)?\s*:\s*/, '').replace(/\s*\]\]$/, '');
+        let out = '';
+        let last = 0;
+        let count = 0;
+        let m;
+        const reg = new RegExp(re.source, 'gi');
+        while ((m = reg.exec(source)) !== null) {
+            if (insideTag(source, m.index)) {
+                out += source.slice(last, m.index + m[0].length);
+                last = m.index + m[0].length;
+                continue;
+            }
+            const matchAll = m[0];
+            const payloadHtml = m[1];
+            let obj = tryParseObj(payloadHtml);
+            if (!obj) {
+                const whole = fragmentToText(matchAll);
+                obj = tryParseObj(parseWhole(whole));
+            }
+            if (!obj) { out += source.slice(last, m.index + m[0].length); last = m.index + m[0].length; continue; }
+            const text = String(obj.text ?? '').trim();
+            if (!text) { out += source.slice(last, m.index + m[0].length); last = m.index + m[0].length; continue; }
 
-    while ((m = re.exec(cleaned)) !== null) {
-        if (insideTag(cleaned, m.index)) {
-            out += cleaned.slice(last, m.index + m[0].length);
-            last = m.index + m[0].length;
-            continue;
-        }
-        const matchAll = m[0];
-        const payloadHtml = m[1];
-        let obj = tryParseObj(payloadHtml);
-        if (!obj) {
-            const whole = fragmentToText(matchAll);
-            const inner = whole.replace(/^\[\[\s*(?:BetterTTS|BTTS)\s*:\s*/, '').replace(/\s*\]\]$/, '');
-            obj = tryParseObj(inner);
-        }
-        if (!obj) {
-            out += cleaned.slice(last, m.index + matchAll.length);
+            out += source.slice(last, m.index);
+            if (kind === 'text') {
+                out += textChipHtml({ key: nextKey(), payload: textPayload(obj), text, time: nowClock() });
+            } else {
+                const character = String(obj.character || obj.name || '').trim();
+                const emotion = String(obj.emotion || '').trim();
+                out += chipHtml({ key: nextKey(), character, emotion, payload: payloadText(obj), text, time: nowClock() });
+            }
             last = m.index + matchAll.length;
-            continue;
+            count++;
         }
-        const text = String(obj.text ?? '').trim();
-        if (!text) {
-            out += cleaned.slice(last, m.index + matchAll.length);
-            last = m.index + matchAll.length;
-            continue;
-        }
-        const character = String(obj.character || obj.name || '').trim();
-        const emotion = String(obj.emotion || '').trim();
-        const payload = payloadText(obj);
+        out += source.slice(last);
+        return { out, count };
+    };
 
-        out += cleaned.slice(last, m.index);
-        out += chipHtml({
-            key: nextKey(),
-            character,
-            emotion,
-            payload,
-            text,
-            time: nowClock(),
-        });
-        last = m.index + matchAll.length;
-        inserted++;
+    let pass = runPass(cleaned, TEXT_CALL_RE, 'text');
+    let final = runPass(pass.out, CALL_RE, 'speech');
+    if (final.count || pass.count || cleaned !== html0) {
+        el.innerHTML = final.out;
     }
-    if (inserted || cleaned !== html0) {
-        el.innerHTML = out + cleaned.slice(last);
-    }
-    return inserted;
+    return final.count + pass.count;
 }
 
-/** 由对象生成“去掉前缀”的规范 JSON（存进属性，避免正则二次匹配） */
+/** 由对象生成“去掉前缀”的规范 JSON（语音调用存进属性，避免正则二次匹配） */
 export function payloadText(obj) {
     const fields = {};
     if (obj.character || obj.name) fields.character = obj.character || obj.name;
@@ -214,9 +231,14 @@ export function payloadText(obj) {
     return JSON.stringify({ text: String(obj.text ?? ''), ...fields });
 }
 
-/** 生成完整的调用文本（右键“复制完整函数调用”用） */
+/** 生成完整的语音调用文本（右键“复制完整函数调用”用） */
 export function wholeCallText(obj) {
     return '[[BTTS: ' + payloadText(obj) + ']]';
+}
+
+/** 生成完整的段落调用文本 */
+export function wholeTextCallText(obj) {
+    return '[[BTTS-TEXT: ' + textPayload(obj) + ']]';
 }
 
 /** 在可见气泡中按规范 payload 找同一声音段的气泡 key（供自动朗读高亮） */
@@ -344,9 +366,13 @@ export function scrubMarkdown(text) {
 export function revertVisibleChips() {
     document.querySelectorAll('.mes .btts-seg').forEach(chip => {
         const payload = chip.dataset.payload || chip.dataset.raw || '';
-        const call = payload.trim().startsWith('[[BetterTTS') ? payload : '[[BetterTTS: ' + payload + ']]';
-        const textNode = document.createTextNode(call);
-        chip.replaceWith(textNode);
+        if (payload.trim().startsWith('[[')) {
+            chip.replaceWith(document.createTextNode(payload));
+            return;
+        }
+        const isText = chip.dataset.kind === 'text';
+        const call = (isText ? '[[BTTS-TEXT: ' : '[[BTTS: ') + payload + ']]';
+        chip.replaceWith(document.createTextNode(call));
     });
 }
 

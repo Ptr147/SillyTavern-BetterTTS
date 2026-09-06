@@ -178,7 +178,9 @@ export function buildSettingsHtml(opts = {}) {
       <div class="btts-hint">
         两种模式使用不同提示词与朗读逻辑：<b>说话模式</b> = 台词输出为函数调用
         <code>[[BTTS: {…}]]</code> / <code>[[BTTS-AddRole: {…}]]</code>，逐句渲染成可点击气泡；
-        <b>全文模式</b> = 只朗读标签（默认 <code>&lt;context&gt;…&lt;/context&gt;</code>，可配置）内的整段全文。
+        <b>全文模式</b> = 每个自然段落输出一次 <code>[[BTTS-TEXT: {…}]]</code>
+        （text=整段内容，roles=本段涉及角色/旁白+情绪），前端渲染成“极简边框样式”，
+        可一段一段朗读（流式开启时每完成一段即播）。
         内容为空时自动填入内置模板并显示在下方，可直接查看与编辑。
       </div>
       <div class="btts-inline">
@@ -194,7 +196,7 @@ export function buildSettingsHtml(opts = {}) {
         <label>合成模式
           <select data-key="prompt.mode" class="text_pole">
             <option value="line">说话模式（函数调用分句）</option>
-            <option value="full">全文朗读模式（只读标签内全文）</option>
+            <option value="full">全文朗读模式（段落级 BTTS-TEXT）</option>
           </select>
         </label>
       </div>
@@ -212,18 +214,11 @@ export function buildSettingsHtml(opts = {}) {
       </fieldset>
 
       <fieldset class="btts-fs">
-        <legend>全文模式提示词（&lt;context&gt;…&lt;/context&gt;）</legend>
+        <legend>全文模式提示词（BTTS-TEXT 段落调用）</legend>
         <textarea data-key="prompt.fullText" class="text_pole btts-inp btts-ta-lg" spellcheck="false"
           placeholder="（内置全文提示词已自动填入，可在此修改）"></textarea>
         <div class="btts-inline">
-          <label>开始标签
-            <input type="text" data-key="prompt.fullTagsOpen" class="text_pole" style="width:120px">
-          </label>
-          <label>结束标签
-            <input type="text" data-key="prompt.fullTagsClose" class="text_pole" style="width:120px">
-          </label>
-          <label class="btts-check" title="全文模式未找到标签时改为朗读整条内容">
-            <input type="checkbox" data-key="prompt.fullFallbackNoTags">无标签时朗读整条</label>
+          <span class="btts-hint">每段一个 [[BTTS-TEXT: {“text”:段落全文,“roles”:[{“character”:角色名,“emotion”:语气}]}]]</span>
           <button type="button" class="menu_button btts-btn btts-prompt-full-reset">恢复全文模式模板</button>
         </div>
       </fieldset>
